@@ -3,6 +3,7 @@ import { Scout, newControl, clearControl } from "./scout";
 import type { ScoutControl } from "./scout";
 import type { Sim, BarkKey } from "./types";
 import type { Titan } from "./titan";
+import { MAP_R } from "./lore";
 
 export type BotKind = "veteran" | "hothead" | "rookie" | "lancer" | "sentinel";
 export type BotState =
@@ -872,7 +873,9 @@ export class BotBrain {
     if (dist < dep.radius - 1 && s.pos.y < 4) {
       this.arrived = true;
       c.move.set(0, 0, 0);
-      if ((s.gas >= 92 && s.spare >= 3 && s.bladeDur >= 60) || this.st > 22) {
+      // leave only when restocked AND mostly healed; the timeout stops a stuck bot from waiting forever
+      const healed = s.hp >= s.maxHp * 0.9;
+      if ((s.gas >= 92 && s.spare >= 3 && s.bladeDur >= 60 && healed) || this.st > 40) {
         this.set("follow");
         this.chooseT = 0.5;
       }
@@ -991,13 +994,14 @@ export class BotBrain {
     const dH = Math.hypot(_to.x, _to.z);
     if (dH > 0.05) _dirH.set(_to.x / dH, 0, _to.z / dH);
     else _dirH.set(Math.sin(s.yaw), 0, Math.cos(s.yaw));
-    // steer away from walls / the edge of town
+    // steer away from walls and back in from the edge of the playable map (MAP_R, ~27 km across)
     if (this.wallT > 0) _dirH.addScaledVector(this.wallN, 1.8);
-    const edge = Math.max(Math.abs(s.pos.x), Math.abs(s.pos.z));
-    if (edge > 90) {
-      const k = clamp((edge - 90) / 14, 0, 1.5);
-      _dirH.x -= Math.sign(s.pos.x) * (Math.abs(s.pos.x) > 90 ? k : 0);
-      _dirH.z -= Math.sign(s.pos.z) * (Math.abs(s.pos.z) > 90 ? k : 0);
+    const rr = Math.hypot(s.pos.x, s.pos.z);
+    const EDGE = MAP_R - 200;
+    if (rr > EDGE) {
+      const k = clamp((rr - EDGE) / 200, 0, 1.5);
+      _dirH.x -= (s.pos.x / rr) * k;
+      _dirH.z -= (s.pos.z / rr) * k;
     }
     _dirH.normalize();
     const needUp = alt - s.pos.y;

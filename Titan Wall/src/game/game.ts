@@ -486,6 +486,7 @@ export class Game implements Sim {
     this.music.play(n);
     this.wave = n;
     this.waveState = "active";
+    this.reinforce();
     const spec = waveSpec(n);
     const spawned: V3[] = [];
     const inMaria = (x: number, z: number) => {
@@ -779,6 +780,21 @@ export class Game implements Sim {
         return;
       }
     }
+  }
+
+  /** Fallen teammates rejoin at the start of the next wave: one life per engagement. */
+  private reinforce() {
+    const sp = this.player.pos;
+    const offX = [-5, 5, 0, -9, 9, -7, 7];
+    const offZ = [2, 2, -5, -1, -1, -6, -6];
+    this.brains.forEach((b, i) => {
+      if (b.scout.alive) return;
+      const at = _v.set(sp.x + offX[i % offX.length], 1, sp.z + offZ[i % offZ.length]);
+      b.scout.reset(at);
+      b.scout.kills = 0;
+      b.respawn();
+      this.bark(b.scout, "reinforce");
+    });
   }
 
   private onRescue(freed: Scout, by: Scout) {
