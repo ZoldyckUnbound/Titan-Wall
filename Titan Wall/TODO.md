@@ -15,6 +15,8 @@
 - [~] **Bosses after wave 60's founding titan:** multiple bosses (war hammer titan and others) that appear late, with the founding titan on wave 60.
   - Done: wave 60 spawns the Founding Titan (1500 HP, 60 units) with two war-hammer titans, two beasts and Reiss. Both new kinds use the shared titan rig; they're stat-differentiated placeholders.
   - Still to do: the war hammer's slam attack, a Founding Titan pattern, and bosses appearing after 60 (e.g. an endless mode).
-- [ ] **Ending cutscene:** resolve the story, reward the player for finishing, show the lasting impact of their actions, then credits or a sequel tease.
+- [~] **Ending cutscene:** resolve the story, reward the player for finishing, show the lasting impact of their actions, then credits or a sequel tease.
+  - Done: epilogue cards built from the run (squad survival, nape cuts), a "Veteran of the Walls" badge kept in the browser, a sequel tease, and a scrolling credits roll (src/Ending.tsx).
+  - Still to do: browser check of the animation, a fuller credits list.
 - [ ] **Music and sound effects:** excitement/drama cues, a different track per wave, tonal themes that reference the seasons of AOT episodes.
 - [ ] **Mobile support:** touch controls that are easy to play.
