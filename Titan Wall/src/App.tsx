@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Ending } from "./Ending";
 import { Game } from "./game/game";
 import type { BarkMsg, Phase, Snapshot, ToastMsg } from "./game/game";
 import { loadAssets } from "./game/assets";
@@ -534,29 +535,13 @@ export default function App() {
         </div>
       )}
 
-      {/* victory */}
+      {/* victory: epilogue, reward and credits */}
       {phase === "won" && s && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-amber-950/60 backdrop-blur-sm">
-          <div className="w-[26rem] max-w-[92vw] rounded-xl border border-amber-300/30 bg-black/75 p-8 text-center">
-            <div className="font-serif text-5xl font-black tracking-widest text-amber-300">VICTORY</div>
-            <div className="mt-1 text-sm text-slate-300">Sixty waves. Wall Maria held — for now.</div>
-            <div className="mt-5 grid grid-cols-3 gap-2 text-center">
-              {[
-                ["Wave", s.wave],
-                ["Nape cuts", s.napeKills],
-                ["Score", s.score.toLocaleString()],
-              ].map(([k, v]) => (
-                <div key={String(k)} className="rounded bg-white/10 p-2">
-                  <div className="text-[10px] tracking-widest text-slate-400">{String(k).toUpperCase()}</div>
-                  <div className="text-xl font-bold">{v}</div>
-                </div>
-              ))}
-            </div>
-            <button onClick={() => deploy()} className="mt-6 rounded bg-amber-400 px-10 py-3 font-extrabold tracking-widest text-black hover:bg-amber-300">
-              PLAY AGAIN
-            </button>
-          </div>
-        </div>
+        <Ending
+          stats={{ wave: s.wave, napeKills: s.napeKills, kills: s.kills, score: s.score, squad: s.squad }}
+          onPlayAgain={() => deploy(1)}
+          onMenu={() => window.location.reload()}
+        />
       )}
 
       {phase !== "menu" && phase !== "dead" && tutStep !== null && (

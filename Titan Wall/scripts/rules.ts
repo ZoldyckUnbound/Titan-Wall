@@ -130,5 +130,17 @@ p4.spears = 0;
 p4.pos.set(dep4.pos.x, 1, dep4.pos.z);
 for (let i = 0; i < 60 * 7; i++) { p4.pos.set(dep4.pos.x, 1, dep4.pos.z); g4.update(1 / 60); }
 check(p4.spears >= 1, `depot restocks a thunder spear (now ${p4.spears})`);
+// 8. ending: impact cards reflect the run (no DOM needed)
+const { impactCards } = await import("../src/Ending");
+const mate = (alive: boolean) => ({ id: "x", name: "n", title: "t", color: "#fff", hp: 1, maxHp: 1, gas: 1, alive, label: "", kills: 0, alert: false });
+const squadAll = [mate(true), mate(true), mate(true)];
+const squadNone = [mate(false), mate(false)];
+const base = { wave: 60, kills: 90, score: 9000, squad: squadAll };
+const titles = (st: any) => impactCards(st).map((c) => c.title);
+check(titles({ ...base, napeKills: 50 }).includes("The nape cut"), "many nape cuts earn the 'nape cut' card");
+check(titles({ ...base, napeKills: 2 }).includes("A few clean cuts"), "few nape cuts earn the modest card");
+check(titles({ ...base, napeKills: 5 }).includes("Nobody left behind"), "a full squad is credited");
+check(titles({ ...base, napeKills: 5, squad: squadNone }).includes("The cost"), "a lost squad is acknowledged");
+check(impactCards({ ...base, napeKills: 5 }).length === 4, "four impact cards per ending");
 console.log(fails ? `${fails} FAILED` : "ALL PASSED");
 process.exit(fails ? 1 : 0);
