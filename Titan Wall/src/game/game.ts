@@ -9,8 +9,19 @@ import { Sfx } from "./audio";
 import { BotBrain, PERSONALITIES, makeBrains, formatBark, stateLabel } from "./bots";
 import type { BotKind } from "./bots";
 import type { Sim, RayHit, BarkKey } from "./types";
+import { waveSpec, FINAL_WAVE } from "./waves";
+import type { SpawnSpec } from "./waves";
+import { MARIA_R, ROSE_R, wallRingAt } from "./lore";
 
-export type Phase = "menu" | "playing" | "paused" | "dead";
+/** A depot is out of order while a titan is this close (game units). */
+const DEPOT_LOCK_R = 45;
+/** Healing only ticks above this HP, and it is slow (see healing()). */
+const HEAL_FLOOR = 75;
+/** Where wave-10's outside titans gather, south of Wall Maria at Shiganshina. */
+const OUTSIDE_HOME = { x: 0, z: MARIA_R + 230 };
+const KICK_WINDUP = 2.6;
+
+export type Phase = "menu" | "playing" | "paused" | "dead" | "won";
 
 export interface BarkMsg {
   id: number;
@@ -134,6 +145,7 @@ export class Game implements Sim {
   private timeScale = 1;
   private slowT = 0;
   private waveState: "active" | "clear" = "active";
+  private kick: { titan: Titan; t: number; stage: "walk" | "windup" } | null = null;
   private waveTimer = 0;
   private combo = 0;
   private comboT = 0;
@@ -185,6 +197,8 @@ export class Game implements Sim {
       { kind: "veteran", hp: 90, ks: 11, dm: 1, pal: { cloak: 0x34503a, hair: 0x9a9a9a, accent: 0x6e86b0 } },
       { kind: "hothead", hp: 80, ks: 9, dm: 2, pal: { cloak: 0x3f6b3a, hair: 0xb3321c, accent: 0xd24a1a, accentOnHead: true } },
       { kind: "rookie", hp: 60, ks: 12, dm: 1, pal: { cloak: 0x4d7a45, hair: 0xe0c068, accent: 0xf2d34a } },
+      { kind: "lancer", hp: 85, ks: 10, dm: 1.5, pal: { cloak: 0x5a3f7a, hair: 0x2b2030, accent: 0xc58bff } },
+      { kind: "sentinel", hp: 75, ks: 11, dm: 1, pal: { cloak: 0x2f5b4f, hair: 0x6b5a3a, accent: 0x7ad1b5 } },
     ];
     const bots = defs.map(
       (d) =>
@@ -415,6 +429,7 @@ export class Game implements Sim {
     this.combo = 0;
     this.time = 0;
     this.waveState = "active";
+    this.kick = null;
     this.delayed = [];
     this.noticedAbnormal.clear();
     this.lastBark.clear();
@@ -424,7 +439,7 @@ export class Game implements Sim {
     this.camYaw = 0;
     this.camPitch = -0.12;
     this.brains.forEach((b, i) => {
-      b.scout.reset(_v.set(sp.x + [-5, 5, 0][i], 1, sp.z + [2, 2, -5][i]));
+      b.scout.reset(_v.set(sp.x + [-5, 5, 0, -9, 9][i], 1, sp.z + [2, 2, -5, -1, -1][i]));
       b.scout.kills = 0;
       b.respawn();
     });
@@ -456,54 +471,128 @@ export class Game implements Sim {
   private startWave(n: number) {
     this.wave = n;
     this.waveState = "active";
-    const count = Math.min(2 + n, 9);
-    const abn = n < 2 ? 0 : Math.min(1 + Math.floor((n - 2) / 2), 3);
+    const spec = waveSpec(n);
     const spawned: V3[] = [];
-    for (let i = 0; i < count; i++) {
-      const isAbn = i >= count - abn;
-      const height = i === 0 ? rand(12, 15) : rand(7, Math.min(15, 10 + n * 0.8));
-      const p = this.world.nav.randomFree(0.5, 1, (x, z) => {
+    const inMaria = (x: number, z: number) => {
+      const d = Math.hypot(x, z);
+      return d > ROSE_R + 40 && d < MARIA_R - 60;
+    };
+    const outsideSpawns: SpawnSpec[] = spec.spawns.filter((s) => s.outside);
+    for (const sp of spec.spawns) {
+      if (sp.outside) continue;
+      const p = this.freeSpot(ROSE_R + 40, MARIA_R - 60, (x, z) => {
+        if (!inMaria(x, z)) return false;
         if (Math.hypot(x - this.player.pos.x, z - this.player.pos.z) < 55) return false;
         return spawned.every((q) => Math.hypot(x - q.x, z - q.z) > 25);
       });
       if (!p) continue;
       spawned.push(p);
-      const t = new Titan(isAbn ? Math.min(height, 12) : height, isAbn, p);
-      this.titans.push(t);
-      this.scene.add(t.model);
+      this.addTitan(sp, p);
     }
-    // reinforcements + resupply between waves
-    if (n > 1) {
-      const pl = this.player;
-      pl.gas = Math.min(pl.maxGas, pl.gas + 55);
-      pl.spare = pl.maxSpare;
-      pl.hp = Math.min(pl.maxHp, pl.hp + 25);
-      for (const b of this.brains) {
-        const s = b.scout;
-        if (!s.alive) {
-          const dep = this.world.nearestDepot(pl.pos);
-          s.reset(_v.set(dep.pos.x + rand(-3, 3), 1, dep.pos.z + rand(-3, 3)));
-          s.model.visible = true;
-          b.respawn();
-          this.bark(s, "reinforce");
-        } else {
-          s.hp = Math.min(s.maxHp, s.hp + 20);
-          s.gas = Math.min(s.maxGas, s.gas + 40);
-          s.spare = Math.min(s.maxSpare, s.spare + 1);
-        }
+    for (const sp of outsideSpawns) this.spawnOutside(sp);
+    if (spec.colossalKick) {
+      const c = this.titans.find((t) => t.kind === "colossal" && t.alive);
+      if (c) {
+        c.scripted = { to: new V3(0, 0, MARIA_R), arriveR: 14, arrived: false };
+        this.kick = { titan: c, t: 0, stage: "walk" };
+        this.after(1.5, () => this.toast("A colossal titan is walking toward Shiganshina!", "bad"));
       }
     }
-    this.toast(`WAVE ${n} — ${count} TITANS${abn ? ` (${abn} ABNORMAL)` : ""}`, "info");
+    // squad mates who are still alive get a little gas; the dead stay dead (one life each).
+    for (const b of this.brains) {
+      if (b.scout.alive) b.scout.gas = Math.min(b.scout.maxGas, b.scout.gas + 20);
+    }
+    // the player gets a modest top-up between waves (supplies are scarce on purpose)
+    if (n > 1) {
+      const pl = this.player;
+      pl.gas = Math.min(pl.maxGas, pl.gas + 25);
+      if (pl.spare < pl.maxSpare) pl.spare = Math.min(pl.maxSpare, pl.spare + 1);
+    }
+    this.toast(`WAVE ${n} — ${spec.title.toUpperCase()}`, "info");
     if (n === 1) {
       this.after(2.2, () => this.toast("Aim at a rooftop, click LMB / RMB to grapple, hold SPACE to boost", "info"));
       this.after(6, () => this.toast("Hit the glowing red nape at 12+ m/s and press F to cut", "info"));
     }
-    const talkers = [...this.brains].sort(() => Math.random() - 0.5).slice(0, 2);
+    const talkers = this.brains.filter((b) => b.scout.alive).sort(() => Math.random() - 0.5).slice(0, 2);
     talkers.forEach((b, i) => this.after(0.9 + i * 1.7, () => b.scout.alive && this.bark(b.scout, "wave_start", { wave: n })));
     const vet = this.brains[0].scout;
     if (vet.alive && this.titans.length) {
       const near = this.titans.reduce((a, t) => (this.dist2(t.pos, this.player.pos) < this.dist2(a.pos, this.player.pos) ? t : a));
       this.after(4.2, () => this.bark(vet, "spot_titan", { dir: relativeDir(this.player.pos, this.player.yaw, near.pos), height: Math.round(near.height) }));
+    }
+  }
+
+  /**
+   * A free ground point in the annulus [r0, r1] around (cx, cz) that passes `accept`.
+   * (NavGrid.randomFree samples the whole map, which is far too sparse for thin bands like Maria.)
+   */
+  private freeSpot(r0: number, r1: number, accept: (x: number, z: number) => boolean, cx = 0, cz = 0): V3 | null {
+    const nav = this.world.nav;
+    for (let k = 0; k < 800; k++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = Math.sqrt(r0 * r0 + Math.random() * (r1 * r1 - r0 * r0));
+      const x = cx + Math.cos(a) * r;
+      const z = cz + Math.sin(a) * r;
+      if (nav.blocked(nav.cx(x), nav.cx(z), 0.5, 1)) continue;
+      if (!accept(x, z)) continue;
+      return new V3(x, 0, z);
+    }
+    return null;
+  }
+
+  private addTitan(sp: SpawnSpec, p: V3) {
+    const t = new Titan(sp.height, sp.kind === "abnormal", p, sp.kind);
+    this.titans.push(t);
+    this.scene.add(t.model);
+    return t;
+  }
+
+  /** Spawn outside Wall Maria, near OUTSIDE_HOME (or a given point), on free ground. */
+  private spawnOutside(sp: SpawnSpec, near: { x: number; z: number } = OUTSIDE_HOME) {
+    const p = this.freeSpot(0, 110, (x, z) => wallRingAt(x, z) === "outside", near.x, near.z);
+    if (p) this.addTitan(sp, p);
+  }
+
+  /** Wave-10 event: the colossal kicks Wall Maria at Shiganshina and the titans come through the gap. */
+  private updateKick(dt: number) {
+    const k = this.kick;
+    if (!k) return;
+    if (!k.titan.alive) {
+      this.kick = null; // killed before it could breach the wall
+      return;
+    }
+    if (k.stage === "walk" && k.titan.scripted?.arrived) {
+      k.stage = "windup";
+      k.t = 0;
+      this.toast("The colossal titan is at Wall Maria!", "bad");
+      this.shake = 1;
+    } else if (k.stage === "windup") {
+      k.t += dt;
+      if (k.t >= KICK_WINDUP) {
+        this.breachMaria(k.titan);
+        this.kick = null;
+      }
+    }
+  }
+
+  private breachMaria(colossal: Titan) {
+    const gap = 40; // metres either side of the gate
+    this.world.breachRing("maria", Math.PI / 2, gap);
+    colossal.scripted = null;
+    colossal.state = "wander";
+    this.shake = 1.5;
+    this.fx.dust(new V3(0, 0, MARIA_R), 40);
+    this.sfx.kill();
+    this.toast("WALL MARIA IS BREACHED — titans are pouring through the gate!", "bad");
+    const breach = waveSpec(this.wave).breachReinforce;
+    breach.forEach((sp, i) => this.after(0.6 + i * 0.7, () => this.spawnOutside(sp, { x: 0, z: MARIA_R + 150 })));
+  }
+
+  /** Depots: resupply and healing, both switched off while a titan is too close. */
+  private healing(dt: number) {
+    for (const s of this.scouts) {
+      if (!s.alive || s.hp <= HEAL_FLOOR || s.hp >= s.maxHp) continue;
+      s.hp = Math.min(s.maxHp, s.hp + 0.35 * dt);
     }
   }
 
@@ -636,6 +725,14 @@ export class Game implements Sim {
       if (front > t.napeR * 1.2 + 1.5) continue; // face side: nape not reachable
       s.slashHit = true;
       const rel = _v.copy(s.vel).sub(t.vel).length();
+      // armored titans wear plate over the nape: only a hard, clean cut gets through
+      if (t.kind === "armored" && rel < s.killSpeed * 1.35) {
+        s.bladeDur = Math.max(0, s.bladeDur - 12);
+        t.hp = Math.max(1, t.hp - 10 * s.dmgMult);
+        this.fx.sparks(t.nape, 10, [0.85, 0.85, 0.9]);
+        if (s.isPlayer) this.toast(`Armour plate! Need ${Math.ceil(s.killSpeed * 1.35)}+ m/s to cut through`, "bad");
+        return;
+      }
       if (rel >= s.killSpeed) {
         const freed = t.grabbed;
         s.bladeDur = Math.max(0, s.bladeDur - rand(9, 15));
@@ -746,6 +843,7 @@ export class Game implements Sim {
       return;
     }
     this.slowT = Math.max(0, this.slowT - dtReal);
+    this.world.nav.beginFrame();
     this.timeScale = damp(this.timeScale, this.slowT > 0 ? 0.3 : 1, 12, dtReal);
     const dt = Math.min(dtReal, 1 / 20) * this.timeScale;
     this.time += dt;
@@ -799,7 +897,16 @@ export class Game implements Sim {
 
     // waves
     const alive = this.titans.filter((t) => t.alive).length;
-    if (this.waveState === "active" && alive === 0 && this.wave > 0) {
+    this.updateKick(dt);
+    this.healing(dt);
+    if (this.waveState === "active" && alive === 0 && this.wave > 0 && this.kick === null) {
+      if (this.wave >= FINAL_WAVE) {
+        this.score += 5000;
+        this.toast("WAVE 60 CLEARED — humanity's last stand holds. Victory!", "good");
+        this.setPhase("won");
+        if (hasDoc && document.pointerLockElement) document.exitPointerLock?.();
+        return;
+      }
       this.waveState = "clear";
       this.waveTimer = 8;
       this.toast(`WAVE ${this.wave} CLEARED — resupply at the depots!`, "good");
@@ -855,10 +962,18 @@ export class Game implements Sim {
       if (!s.alive || s.grabbedBy) continue;
       for (const d of this.world.depots) {
         if (Math.hypot(d.pos.x - s.pos.x, d.pos.z - s.pos.z) > d.radius || s.pos.y > 4.5) continue;
-        s.gas = Math.min(s.maxGas, s.gas + 40 * dt);
-        s.hp = Math.min(s.maxHp, s.hp + 6 * dt);
+        const locked = this.titans.some((t) => t.alive && Math.hypot(t.pos.x - d.pos.x, t.pos.z - d.pos.z) < DEPOT_LOCK_R);
+        if (locked) {
+          if (s.isPlayer && this.resupMsgT <= 0) {
+            this.resupMsgT = 4;
+            this.toast("Depot offline — a titan is too close!", "bad");
+          }
+          break;
+        }
+        s.gas = Math.min(s.maxGas, s.gas + 12 * dt);
+        if (s.hp > HEAL_FLOOR) s.hp = Math.min(s.maxHp, s.hp + 1.2 * dt);
         const t = (this.resupT.get(s.id) ?? 0) + dt;
-        if (t > 1.1 && s.spare < s.maxSpare) {
+        if (t > 3 && s.spare < s.maxSpare) {
           s.spare++;
           this.resupT.set(s.id, 0);
         } else this.resupT.set(s.id, t);

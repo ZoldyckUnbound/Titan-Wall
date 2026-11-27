@@ -4,7 +4,7 @@ import type { ScoutControl } from "./scout";
 import type { Sim, BarkKey } from "./types";
 import type { Titan } from "./titan";
 
-export type BotKind = "veteran" | "hothead" | "rookie";
+export type BotKind = "veteran" | "hothead" | "rookie" | "lancer" | "sentinel";
 export type BotState =
   | "follow"
   | "hesitate"
@@ -33,6 +33,10 @@ export interface Personality {
   mistime: number;
   evade: boolean;
   rescueChance: number;
+  /** 0 (never confident) to 1 (fights on regardless of wounds). */
+  bravery: number;
+  /** Retreat to a depot when HP falls below this fraction of max, unless confident of the kill. */
+  retreatAt: number;
   w: { ally: number; size: number; near: number; distracted: number; abnormal: number; spread: number };
 }
 
@@ -52,6 +56,8 @@ export const PERSONALITIES: Record<BotKind, Personality> = {
     mistime: 0,
     evade: true,
     rescueChance: 1,
+    bravery: 0.7,
+    retreatAt: 0.35,
     w: { ally: 5, size: 0.05, near: 2, distracted: 0.8, abnormal: 0.5, spread: 1.5 },
   },
   hothead: {
@@ -69,6 +75,8 @@ export const PERSONALITIES: Record<BotKind, Personality> = {
     mistime: 0.02,
     evade: false,
     rescueChance: 0.35,
+    bravery: 0.9,
+    retreatAt: 0.2,
     w: { ally: 0.5, size: 1.2, near: 1, distracted: 0, abnormal: 0, spread: 0 },
   },
   rookie: {
@@ -86,7 +94,47 @@ export const PERSONALITIES: Record<BotKind, Personality> = {
     mistime: 0.3,
     evade: true,
     rescueChance: 1,
+    bravery: 0.2,
+    retreatAt: 0.5,
     w: { ally: 1, size: -0.35, near: 1.2, distracted: 4, abnormal: -4, spread: 2 },
+  },
+  lancer: {
+    kind: "lancer",
+    name: "Bram",
+    title: "The Steady Lancer",
+    color: "#c58bff",
+    cruiseAlt: 18,
+    gasFloor: 35,
+    diveGasFloor: 18,
+    swapAt: 50,
+    resupplyGas: 28,
+    hesitation: [0.2, 0.8],
+    panicRadius: 9,
+    mistime: 0.05,
+    evade: true,
+    rescueChance: 0.9,
+    bravery: 0.75,
+    retreatAt: 0.3,
+    w: { ally: 3, size: 0.2, near: 1.6, distracted: 1.2, abnormal: 0.8, spread: 1.6 },
+  },
+  sentinel: {
+    kind: "sentinel",
+    name: "Oda",
+    title: "The Cautious Sentinel",
+    color: "#7ad1b5",
+    cruiseAlt: 28,
+    gasFloor: 45,
+    diveGasFloor: 25,
+    swapAt: 40,
+    resupplyGas: 30,
+    hesitation: [0.6, 1.4],
+    panicRadius: 14,
+    mistime: 0.1,
+    evade: true,
+    rescueChance: 0.6,
+    bravery: 0.4,
+    retreatAt: 0.45,
+    w: { ally: 2, size: -0.1, near: 1.3, distracted: 2.2, abnormal: -0.5, spread: 2.2 },
   },
 };
 
@@ -165,6 +213,54 @@ export const LINES: Record<BotKind, Lines> = {
     wave_clear: ["We... we made it?"],
     reinforce: ["S-sorry I'm late!"],
     idle: ["Is it... is it over?"],
+  },
+  lancer: {
+    wave_start: ["Wave {wave}. Stay close and cut clean.", "Keep your blades sharp."],
+    spot_titan: ["Titan, {dir}. Hold the line."],
+    spot_abnormal: ["Abnormal. Watch its legs."],
+    threat_player: ["Behind you — move!"],
+    player_low_gas: ["Gas is low. Resupply when you can."],
+    hesitate: ["Steady.", "Wait for the opening."],
+    panic: ["Back off, back off!"],
+    crash: ["Landed badly. Still moving."],
+    ally_grabbed: ["{name} is held! Cutting in."],
+    rescue_go: ["On my way, {name}."],
+    grabbed: ["Get me out of here!"],
+    rescued: ["Good. Stay with me."],
+    thanks: ["Thanks. Owe you one."],
+    kill: ["Nape cut. Next."],
+    praise: ["Clean work."],
+    out_of_gas: ["Out of gas."],
+    blades_broken: ["Blades gone. Swapping."],
+    resupply: ["Pulling back to the depot."],
+    dive: ["Going in."],
+    wave_clear: ["Clear. Reload."],
+    reinforce: ["Back in the fight."],
+    idle: ["Quiet... for now."],
+  },
+  sentinel: {
+    wave_start: ["Wave {wave}. Keep your distance from the big ones.", "Count the titans first."],
+    spot_titan: ["Titan {dir}, about {height} metres."],
+    spot_abnormal: ["Abnormal! Keep moving, don't stop."],
+    threat_player: ["Something's on you — break left!"],
+    player_low_gas: ["Your gas is low. Get to a depot."],
+    hesitate: ["Not yet...", "Let it come to us."],
+    panic: ["Too close! Pulling out!"],
+    crash: ["Ugh — roof was rotten."],
+    ally_grabbed: ["{name} is taken. Hold position, I'll cover."],
+    rescue_go: ["I'll try for {name}. Don't do anything stupid."],
+    grabbed: ["Somebody... please..."],
+    rescued: ["Thank the walls, you're free."],
+    thanks: ["Thanks."],
+    kill: ["Down. Breathing again."],
+    praise: ["Good cut."],
+    out_of_gas: ["No gas left!"],
+    blades_broken: ["Blades broken. Swapping now."],
+    resupply: ["Falling back to resupply. Hurt."],
+    dive: ["Going for it."],
+    wave_clear: ["It's clear. Hold on."],
+    reinforce: ["Ready when you are."],
+    idle: ["Still watching the gap."],
   },
 };
 
@@ -335,6 +431,15 @@ export class BotBrain {
       this.set("resupply");
       this.target = null;
       this.bark(sim, s.gas < 10 ? "out_of_gas" : "resupply");
+    }
+
+    // wounded: fall back to a depot, unless this bot is sure of a kill (brave bots fight on longer)
+    const wounded = s.hp < s.maxHp * P.retreatAt;
+    const sureOfKill = !!this.target && this.target.alive && this.target.hp <= 40 && P.bravery >= 0.5 && s.bladeDur > 30;
+    if (wounded && !sureOfKill && this.state !== "resupply" && this.state !== "panic" && this.state !== "rescue" && !s.grabbedBy) {
+      this.set("resupply");
+      this.target = null;
+      this.bark(sim, "resupply");
     }
 
     // rescue trigger

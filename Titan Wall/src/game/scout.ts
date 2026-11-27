@@ -122,6 +122,8 @@ export class Scout {
   alive = true;
   grabbedBy: Titan | null = null;
   struggle = 0;
+  /** Seconds left during which no titan may grab this scout (set after a release or death drop). */
+  grabImmune = 0;
   killSpeed: number;
   dmgMult: number;
   kills = 0;
@@ -258,6 +260,7 @@ export class Scout {
     this.msgCd = Math.max(0, this.msgCd - dt);
     this.sinceBoost += dt;
     this.sinceSwat += dt;
+    this.grabImmune = Math.max(0, this.grabImmune - dt);
     if (this.swapT > 0) {
       this.swapT -= dt;
       if (this.swapT <= 0) {

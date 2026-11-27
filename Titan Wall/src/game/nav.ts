@@ -152,7 +152,32 @@ export class NavGrid {
     return null;
   }
 
-  findPath(from: THREE.Vector3, to: THREE.Vector3, maxH: number, infl: number, guard = 40000): THREE.Vector3[] | null {
+  /** A* searches left this frame (see beginFrame). */
+  private budget = 1e9;
+
+  /** Reset the per-frame A* budget. Searches beyond it return null and are retried on a later frame. */
+  beginFrame(searches = 3) {
+    this.budget = searches;
+  }
+
+  /** A random free point in the annulus [r0, r1] around (cx, cz). */
+  freeInRing(cx: number, cz: number, r0: number, r1: number, accept?: (x: number, z: number) => boolean, tries = 200): THREE.Vector3 | null {
+    for (let k = 0; k < tries; k++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = Math.sqrt(r0 * r0 + Math.random() * (r1 * r1 - r0 * r0));
+      const x = cx + Math.cos(a) * r;
+      const z = cz + Math.sin(a) * r;
+      if (Math.abs(x) >= -this.origin || Math.abs(z) >= -this.origin) continue;
+      if (this.blocked(this.cx(x), this.cx(z), 0.5, 1)) continue;
+      if (accept && !accept(x, z)) continue;
+      return new THREE.Vector3(x, 0, z);
+    }
+    return null;
+  }
+
+  findPath(from: THREE.Vector3, to: THREE.Vector3, maxH: number, infl: number, guard = 8000): THREE.Vector3[] | null {
+    if (this.budget <= 0) return null;
+    this.budget--;
     const sFree = this.nearestFree(this.cx(from.x), this.cx(from.z), maxH, infl);
     const gFree = this.nearestFree(this.cx(to.x), this.cx(to.z), maxH, infl);
     if (!sFree || !gFree) return null;

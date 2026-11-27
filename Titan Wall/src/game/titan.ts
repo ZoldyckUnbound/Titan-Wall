@@ -1,9 +1,12 @@
 import * as THREE from "three";
 import { V3, clamp, damp, rand, turnToward, angleDiff } from "./math";
 import { buildTitan } from "./models";
+import { KIND_HP } from "./waves";
+import type { SpawnKind } from "./waves";
 import type { TitanParts } from "./models";
 import type { Sim } from "./types";
 import type { Scout } from "./scout";
+import type { Box } from "./world";
 
 export type TitanState =
   | "wander"
@@ -39,6 +42,7 @@ let nextId = 1;
 export class Titan {
   readonly id = nextId++;
   readonly abnormal: boolean;
+  readonly kind: SpawnKind;
   readonly height: number;
   readonly napeR: number;
   readonly radius: number;
@@ -95,14 +99,17 @@ export class Titan {
   private t = Math.random() * 10;
   private lookT = 0;
 
-  constructor(height: number, abnormal: boolean, pos: THREE.Vector3) {
+  constructor(height: number, abnormal: boolean, pos: THREE.Vector3, kind: SpawnKind = abnormal ? "abnormal" : "normal") {
+    this.kind = kind;
     this.height = height;
     this.abnormal = abnormal;
+    this.hp = KIND_HP[kind];
     this.pos.copy(pos);
     this.napeR = clamp(0.085 * height, 0.9, 1.4);
     this.radius = Math.max(1.1, 0.11 * height);
-    this.walkSpeed = 2.0 + (15 - height) * 0.08;
-    this.runSpeed = abnormal ? 11.2 - height * 0.12 : 6.8 - height * 0.15;
+    // speeds never go negative: the formulas were tuned for 7–15 unit titans and clamp for the giants
+    this.walkSpeed = clamp(2.0 + (15 - height) * 0.08, 1.0, 3.0);
+    this.runSpeed = clamp((abnormal ? 11.2 - height * 0.12 : 6.8 - height * 0.15), abnormal ? 6 : 2.8, abnormal ? 11.2 : 6.8);
     this.reach = 0.5 * height + 1.6;
     this.turnRate = abnormal ? 4.2 : 2.3;
     this.yaw = rand(0, Math.PI * 2);
@@ -184,6 +191,7 @@ export class Titan {
       s.vel.set(0, -3, 0);
       s.stun = 0.5;
       s.invuln = 1.5;
+      s.grabImmune = 4;
     }
     this.state = "stunned";
     this.stunT = 2.4;
@@ -199,6 +207,7 @@ export class Titan {
       s.vel.set(0, -2, 0);
       s.stun = 0.8;
       s.invuln = 1.5;
+      s.grabImmune = 4;
     }
     this.alive = false;
     this.state = "dead";
@@ -290,10 +299,17 @@ export class Titan {
     this.vel.set(0, 0, 0);
   }
 
+  /** Scripted walk (wave-10 colossal): walks straight at `to` and holds once within `arriveR`. */
+  scripted: { to: V3; arriveR: number; arrived: boolean } | null = null;
+
   update(dt: number, sim: Sim) {
     this.t += dt;
     if (this.state === "dead") {
       this.updateDead(dt, sim);
+      return;
+    }
+    if (this.scripted) {
+      this.updateScripted(dt, sim);
       return;
     }
     this.st += dt;
@@ -367,7 +383,7 @@ export class Titan {
     }
     if (this.pathI >= this.path.length) {
       const nav = sim.world.nav;
-      const goal = nav.randomFree(0.5, 1, (x, z) => Math.hypot(x - this.pos.x, z - this.pos.z) > 30);
+      const goal = nav.freeInRing(this.pos.x, this.pos.z, 30, 900);
       const p = goal ? nav.findPath(this.pos, goal, 0.5, 1) : null;
       if (!p || !p.length) {
         this.waitT = 1;
@@ -516,7 +532,7 @@ export class Titan {
     for (const s of sim.scouts) {
       if (!s.alive || s.grabbedBy || s.invuln > 0) continue;
       if (s.pos.distanceTo(hp) < R) {
-        if (!this.grabbed && Math.random() < 0.55) this.grab(s, sim);
+        if (!this.grabbed && Math.random() < 0.55 && this.canGrab(s, sim)) this.grab(s, sim);
         else this.swat(s, sim);
         if (this.grabbed) {
           this.pos.y = 0;
@@ -544,12 +560,26 @@ export class Titan {
     for (const s of sim.scouts) {
       if (!s.alive || s.grabbedBy) continue;
       if (s.pos.distanceTo(hp) > R) continue;
-      if (this.attackKind === "grab" && !this.grabbed && !grabbedOne) {
+      if (this.attackKind === "grab" && !this.grabbed && !grabbedOne && this.canGrab(s, sim)) {
         this.grab(s, sim);
         grabbedOne = true;
       } else this.swat(s, sim);
     }
     sim.fx.dust(hp, 8);
+  }
+
+  /**
+   * Whether this titan may take hold of `s`. Titans never chain-grab: a scout who just slipped out of
+   * another titan's hand is immune for a few seconds, and nobody grabs while a second titan is within
+   * arm's reach of the scout (adjacent titans would otherwise pass the player between them).
+   */
+  canGrab(s: Scout, sim: Sim) {
+    if (s.grabImmune > 0 || s.grabbedBy || this.kind === "colossal") return false;
+    for (const o of sim.titans) {
+      if (o === this || !o.alive) continue;
+      if (Math.hypot(o.pos.x - s.pos.x, o.pos.z - s.pos.z) < 9) return false;
+    }
+    return true;
   }
 
   private grab(s: Scout, sim: Sim) {
@@ -594,8 +624,10 @@ export class Titan {
     this.pos.x += this.vel.x * dt;
     this.pos.z += this.vel.z * dt;
     const r = this.radius;
+    const smash: Box[] = [];
     for (const b of sim.world.boxes) {
       if (this.pos.x < b.minX - r || this.pos.x > b.maxX + r || this.pos.z < b.minZ - r || this.pos.z > b.maxZ + r) continue;
+      if (b.kind === "building" && this.height >= 9 && this.moveSpeed > 2.5 && b.spec?.destructible) smash.push(b);
       const qx = clamp(this.pos.x, b.minX, b.maxX);
       const qz = clamp(this.pos.z, b.minZ, b.maxZ);
       const dx = this.pos.x - qx;
@@ -618,6 +650,9 @@ export class Titan {
         else this.pos.z = b.maxZ + r;
       }
     }
+    for (const b of smash) {
+      if (sim.world.destroyBuilding(b)) sim.fx.dust(this.pos, 10);
+    }
     for (const o of sim.titans) {
       if (o === this || !o.alive) continue;
       const dx = this.pos.x - o.pos.x;
@@ -632,6 +667,26 @@ export class Titan {
     const lim = sim.world.half - r;
     this.pos.x = clamp(this.pos.x, -lim, lim);
     this.pos.z = clamp(this.pos.z, -lim, lim);
+  }
+
+  private updateScripted(dt: number, sim: Sim) {
+    const s = this.scripted!;
+    const dx = s.to.x - this.pos.x;
+    const dz = s.to.z - this.pos.z;
+    const d = Math.hypot(dx, dz);
+    if (!s.arrived && d < s.arriveR) s.arrived = true;
+    if (s.arrived) {
+      this.stop();
+      this.moveSpeed = 0;
+      return;
+    }
+    const sp = Math.max(5, this.walkSpeed * 2);
+    this.vel.set((dx / d) * sp, 0, (dz / d) * sp);
+    this.yaw = turnToward(this.yaw, Math.atan2(dx, dz), this.turnRate * dt);
+    this.integrate(dt, sim);
+    this.updateSpheres();
+    this.parts.root.position.copy(this.pos);
+    this.parts.root.rotation.y = this.yaw;
   }
 
   private updateDead(dt: number, sim: Sim) {
