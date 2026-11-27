@@ -11,7 +11,8 @@
 - [~] **Research and implement Roblox "AOT Revolution" mechanics.** Where they conflict with existing logic, AOT Revolution takes priority.
   - Research (thegamer.com, deltiasgaming.com, attackontitanrevolutionwiki.wiki): ODM hooks on Q (left) and E (right), hold to stay attached; LMB cuts with the blades; R reloads blades (3 spare reloads); Space boosts; gas drains while holding/boosting; releasing the hook before landing keeps momentum without gas; hooks catch titans too; reload stations on each map; hold A/D to swing sideways; nape cut from behind.
   - Done: hooks on Q/E (hold keeps the rope), LMB slash, F thunder spear (moved from E), R reload, Space boost, Shift reel. Controls, tutorial and HUD text updated to match.
-  - Still to do: reload stations (depots already restock), A/D swing while hooked, Titan shifting, perks/families (decide scope).
+  - Verified in scripts/aot.ts: A/D swings while hooked, a hooked swing burns no gas, boost lifts while looking down, and depots restock spare blades (the reload stations).
+  - Still to do: Titan shifting, perks and families (decide scope), a hooked-release momentum check on landing.
 - [~] **Bosses after wave 60's founding titan:** multiple bosses (war hammer titan and others) that appear late, with the founding titan on wave 60.
   - Done: wave 60 spawns the Founding Titan (1500 HP, 60 units) with two war-hammer titans, two beasts and Reiss. Hammer and Founding have their own silhouettes (hammer prop, halo, long hair), tuned speed and windup, wider swings, and armour plate (a clean 1.35× cut kills). scripts/bosses.ts checks they can be killed.
   - Still to do: a slam shockwave for the hammer, a Founding pattern, and bosses after 60 (e.g. an endless mode).
