@@ -422,7 +422,8 @@ export default function App() {
           )}
 
           {/* bottom bars */}
-          <div className="absolute bottom-4 left-1/2 w-[34rem] max-w-[92vw] -translate-x-1/2">
+          {/* phones: the bars sit left of the touch button column instead of centred over it */}
+          <div className={touch ? "absolute bottom-4 left-[150px] right-[200px]" : "absolute bottom-4 left-1/2 w-[34rem] max-w-[92vw] -translate-x-1/2"}>
             <div className="rounded-lg border border-white/15 bg-black/55 p-3 backdrop-blur-sm">
               <div className="grid grid-cols-2 gap-4">
                 <div>
