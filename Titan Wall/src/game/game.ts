@@ -1016,7 +1016,7 @@ export class Game implements Sim {
       t.stepped = false;
       if (!t.alive) continue;
       const d = Math.hypot(t.pos.x - p.pos.x, t.pos.z - p.pos.z);
-      this.sfx.thud((t.height / 15) * clamp(1 - d / 110, 0, 1) * 0.6);
+      this.sfx.step(t.kind, t.height, clamp(1 - d / 110, 0, 1) * 0.6 * Math.min(1, t.height / 15));
     }
   }
 
@@ -1031,6 +1031,7 @@ export class Game implements Sim {
       return;
     }
     p.spears--;
+    this.sfx.spear();
     const cp = Math.cos(this.camPitch);
     const dir = new V3(Math.sin(this.camYaw) * cp, Math.sin(this.camPitch), Math.cos(this.camYaw) * cp).normalize();
     const origin = new V3(p.pos.x, p.pos.y + 0.9, p.pos.z);
@@ -1041,6 +1042,7 @@ export class Game implements Sim {
       const t = hit.titan;
       t.hp = Math.max(1, t.hp - 45);
       t.pin(5);
+      this.sfx.spearPin();
       this.fx.sparks(hit.point, 20, [0.6, 0.85, 1]);
       this.toast(t.grabbed ? "The spear hit — but the Titan is holding a squadmate!" : "THUNDER SPEAR — Titan pinned!", "good");
     } else if (hit) {

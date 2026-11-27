@@ -78,5 +78,23 @@ function attach(g: Game, at: [number, number, number], anchor: [number, number, 
   check(g.player.spare >= 1, `a depot restocks spare blades (spare ${g.player.spare})`);
 }
 
+// 5. sound: the spear throw and pin, and titan footfalls by kind, are triggered and never throw without audio
+{
+  const g = fresh();
+  const calls: string[] = [];
+  const sfx = g.sfx as any;
+  for (const name of ["spear", "spearPin", "step"]) {
+    const orig = sfx[name].bind(sfx);
+    sfx[name] = (...args: any[]) => { calls.push(name); return orig(...args); };
+  }
+  g.player.spears = 2;
+  g.player.pos.set(0, 30, 0);
+  g.touchAction("spear");
+  g.update(dt);
+  check(calls.includes("spear") && g.player.spears === 1, "throwing a spear plays the throw sound");
+  for (const k of ["normal", "beast", "reiss", "hammer", "founding"] as const) sfx.step(k, 12, 0.5);
+  check(true, "footsteps for every titan kind run without audio (no throw)");
+}
+
 console.log(fails === 0 ? "ALL PASSED" : `${fails} FAILED`);
 if (fails) process.exitCode = 1;

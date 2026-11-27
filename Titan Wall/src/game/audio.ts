@@ -110,6 +110,24 @@ export class Sfx {
     if (vol < 0.02) return;
     this.tone(70, 32, 0.28, Math.min(0.5, vol));
   }
+  /** Titan footfall by kind: a beast's quick light step, Reiss's dry bone scrape, a deep heavy stamp for the hammer and Founding. */
+  step(kind: string, height: number, vol: number) {
+    if (vol < 0.02) return;
+    if (kind === "reiss") this.hiss(0.22, 0.5 * vol, 2500, 600, "bandpass");
+    else if (kind === "beast") this.tone(130, 55, 0.09, Math.min(0.4, vol * 0.8));
+    else if (kind === "hammer" || kind === "founding" || kind === "colossal") this.tone(50, 22, 0.45, Math.min(0.6, vol * 1.2));
+    else this.thud(vol * (0.6 + height / 40));
+  }
+  /** Thunder spear leaving the hand: a whoosh and an electric crack. */
+  spear() {
+    this.hiss(0.25, 0.3, 800, 6000, "highpass");
+    this.tone(900, 300, 0.2, 0.2, "sawtooth");
+  }
+  /** Thunder spear pinning a titan: an electric buzz with a heavy knock. */
+  spearPin() {
+    this.tone(600, 80, 0.5, 0.3, "square");
+    this.hiss(0.4, 0.3, 3000, 400, "bandpass");
+  }
   grab() {
     this.tone(420, 190, 0.5, 0.3, "sawtooth");
     this.tone(450, 200, 0.5, 0.2, "sawtooth");
