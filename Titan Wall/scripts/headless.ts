@@ -23,8 +23,9 @@ for (let i = 0; i < SECONDS * 60; i++) {
   if (playerScript) {
     // simple scripted player: hold W, alternate hooks, boost in bursts
     anyG.keys.add("KeyW");
-    anyG.mouse[0] = Math.floor(t / 2) % 2 === 0;
-    anyG.mouse[1] = Math.floor(t / 2) % 2 === 1;
+    // hooks alternate Q (left) and E (right); LMB slash is handled by the script's pendSlash
+    anyG.keys.delete(Math.floor(t / 2) % 2 === 0 ? "KeyE" : "KeyQ");
+    anyG.keys.add(Math.floor(t / 2) % 2 === 0 ? "KeyQ" : "KeyE");
     if (i % 90 === 0) (g as unknown as { pendFire: number[] }).pendFire = [0.2, 0.2];
     if (Math.floor(t) % 6 < 2) anyG.keys.add("Space");
     else anyG.keys.delete("Space");

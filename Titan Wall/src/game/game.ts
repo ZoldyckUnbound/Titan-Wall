@@ -318,8 +318,10 @@ export class Game implements Sim {
       if (e.repeat) return;
       this.keys.add(e.code);
       if (e.code === "KeyR") this.pendSwap = true;
-      if (e.code === "KeyE") this.pendSpear = true;
-      if (e.code === "KeyF" || e.code === "KeyQ") this.pendSlash = true;
+      // AOT Revolution layout: Q / E fire the left / right hook (hold to keep the rope), LMB cuts, F throws a spear
+      if (e.code === "KeyQ") this.pendFire[0] = 0.18;
+      if (e.code === "KeyE") this.pendFire[1] = 0.18;
+      if (e.code === "KeyF") this.pendSpear = true;
       if (e.code === "Space") this.pendStruggle = true;
       if (e.code === "KeyP") this.pause();
       if (e.code === "KeyM") this.sfx.toggleMute();
@@ -336,13 +338,9 @@ export class Game implements Sim {
       if (e.target !== canvas && e.target !== this.overlay) return;
       if (e.button === 0) {
         this.mouse[0] = true;
-        this.pendFire[0] = 0.18;
-      } else if (e.button === 2) {
-        this.mouse[1] = true;
-        this.pendFire[1] = 0.18;
+        this.pendSlash = true;
       } else if (e.button === 1) {
         e.preventDefault();
-        this.pendSlash = true;
       }
     });
     on(window, "mouseup", (e) => {
@@ -811,8 +809,8 @@ export class Game implements Sim {
     c.reel = k.has("ShiftLeft") || k.has("ShiftRight");
     const cp = Math.cos(this.camPitch);
     c.boostDir.set(Math.sin(this.camYaw) * cp, Math.sin(this.camPitch), Math.cos(this.camYaw) * cp);
-    c.hold[0] = this.mouse[0];
-    c.hold[1] = this.mouse[1];
+    c.hold[0] = this.keys.has("KeyQ");
+    c.hold[1] = this.keys.has("KeyE");
     for (let i = 0; i < 2; i++) {
       if (this.pendFire[i] > 0) {
         this.pendFire[i] -= dt;

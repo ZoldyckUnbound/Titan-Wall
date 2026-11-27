@@ -32,12 +32,12 @@ function Bar({ value, max, from, to, h = "h-2.5", flash }: { value: number; max:
 }
 
 const CONTROLS: [React.ReactNode, string][] = [
-  [<><Key>LMB</Key> <Key>RMB</Key></>, "Fire left / right grapple (hold to stay attached)"],
+  [<><Key>Q</Key> <Key>E</Key></>, "Fire left / right grapple (hold to stay attached)"],
   [<Key wide>SPACE</Key>, "Gas boost toward your anchors (or where you look)"],
   [<Key wide>SHIFT</Key>, "Reel in the rope — free speed, no gas"],
-  [<><Key>F</Key> <Key>Q</Key></>, "Slash — needs speed at the nape to kill"],
+  [<Key>LMB</Key>, "Slash — needs speed at the nape to kill"],
   [<Key>R</Key>, "Swap dull blades (works mid-air)"],
-  [<Key>E</Key>, "Throw a thunder spear along your aim (pins a Titan)"],
+  [<Key>F</Key>, "Throw a thunder spear along your aim (pins a Titan)"],
   [<><Key>W</Key><Key>A</Key><Key>S</Key><Key>D</Key></>, "Run / steer in the air"],
   [<Key>MOUSE</Key>, "Look (arrow keys also work)"],
   [<Key>M</Key>, "Mute / unmute sound"],
@@ -79,11 +79,11 @@ const markTutorialDone = () => {
 
 const TUTORIAL: { title: string; body: string }[] = [
   { title: "Move and look", body: "W A S D runs along the ground. Move the mouse to look around. Arrow keys work too." },
-  { title: "Grapple", body: "Click left or right mouse to fire a hook at a rooftop, wall or titan. The rope pulls you toward the anchor. Hooks only catch solid things, not open ground." },
+  { title: "Grapple", body: "Press Q (left) or E (right) to fire a hook at a rooftop, wall or titan. Hold it to stay attached. The rope pulls you toward the anchor. Hooks only catch solid things, not open ground." },
   { title: "Boost", body: "Hold SPACE to fire your gas. It pushes you up and forward, even when you look down. Boosting burns gas; swinging and reeling are free." },
   { title: "Reel in", body: "Hold SHIFT to shorten the rope and swing in tighter. It costs no gas." },
   { title: "Landing", body: "Touch down gently or boost into the landing. A hard, flat crash into a wall or street hurts." },
-  { title: "Cut the nape", body: "Reach a titan's glowing red nape at 12 m/s or faster and press F (or Q) to slash. Blades dull as you cut; R swaps in a fresh set." },
+  { title: "Cut the nape", body: "Reach a titan's glowing red nape at 12 m/s or faster and click LMB to slash. Blades dull as you cut; R swaps in a fresh set." },
   { title: "Depots and squad", body: "Depots restock gas and blades and heal you. A depot goes offline when a titan is too close. Squad mates have one life each, so keep them alive." },
 ];
 
@@ -434,7 +434,7 @@ export default function App() {
                         <span key={i} className={`h-2.5 w-1 rounded-sm ${i < s.spare ? "bg-slate-100" : "bg-white/15"}`} />
                       ))}
                     </span>
-                    <span className="ml-2 flex items-center gap-1 text-[10px] text-sky-200" title="Thunder spears (E)">
+                    <span className="ml-2 flex items-center gap-1 text-[10px] text-sky-200" title="Thunder spears (F)">
                       {[0, 1, 2].map((i) => (
                         <span key={i} className={`h-3 w-0.5 rounded-sm ${i < s.spears ? "bg-sky-300" : "bg-white/15"}`} />
                       ))}
@@ -464,7 +464,7 @@ export default function App() {
                   <b className={s.hooks[1] === "attached" ? "text-emerald-300" : ""}>R {s.hooks[1] === "idle" ? "—" : s.hooks[1]}</b>
                 </span>
                 {s.resupplying && <span className="animate-pulse font-bold text-cyan-300">RESUPPLYING…</span>}
-                <span>LMB/RMB hook · SPACE boost · SHIFT reel · F slash · R blades · E spear</span>
+                <span>Q/E hooks · LMB slash · SPACE boost · SHIFT reel · R blades · F spear</span>
               </div>
             </div>
           </div>

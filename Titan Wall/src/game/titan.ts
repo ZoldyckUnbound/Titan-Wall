@@ -606,7 +606,7 @@ export class Titan {
    * arm's reach of the scout (adjacent titans would otherwise pass the player between them).
    */
   canGrab(s: Scout, sim: Sim) {
-    if (s.grabImmune > 0 || s.grabbedBy || this.kind === "colossal") return false;
+    if (s.grabImmune > 0 || s.grabbedBy || this.kind === "colossal" || this.kind === "founding") return false;
     for (const o of sim.titans) {
       if (o === this || !o.alive) continue;
       if (Math.hypot(o.pos.x - s.pos.x, o.pos.z - s.pos.z) < 9) return false;

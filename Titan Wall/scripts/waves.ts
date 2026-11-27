@@ -22,6 +22,7 @@ check(waveSpec(20).spawns.every((s) => s.kind === "beast") && waveSpec(20).spawn
 check(waveSpec(25).spawns.some((s) => s.kind === "reiss") && waveSpec(25).spawns.some((s) => s.kind === "abnormal"), "wave 25 is Reiss + abnormals");
 check(waveSpec(15).spawns.some((s) => s.kind === "armored") || waveSpec(16).spawns.some((s) => s.kind === "armored"), "armored titans appear from wave 15");
 check(FINAL_WAVE === 60, "campaign ends at wave 60");
+check(waveSpec(60).spawns.some((s) => s.kind === "founding") && waveSpec(60).spawns.filter((s) => s.kind === "hammer").length >= 2, "wave 60: Founding Titan with war-hammer escort");
 for (let n = 1; n <= 60; n++) {
   const s = waveSpec(n);
   if (s.spawns.length === 0) check(false, `wave ${n} has no spawns`);

@@ -12,7 +12,7 @@
  *
  * Heights are in game units (metres of the in-game scale, the same units as the wall height).
  */
-export type SpawnKind = "normal" | "abnormal" | "armored" | "colossal" | "beast" | "reiss";
+export type SpawnKind = "normal" | "abnormal" | "armored" | "colossal" | "beast" | "reiss" | "hammer" | "founding";
 
 export interface SpawnSpec {
   kind: SpawnKind;
@@ -46,6 +46,8 @@ export const KIND_HP: Record<SpawnKind, number> = {
   colossal: 700,
   beast: 320,
   reiss: 520,
+  hammer: 650,
+  founding: 1500,
 };
 
 /** Build the spawn list for wave `n` (1..60). Randomised heights, deterministic counts. */
@@ -87,10 +89,13 @@ export function waveSpec(n: number): WaveSpec {
   add("abnormal", abnormals, () => rnd(10, 12));
   add("armored", armored, () => rnd(13, 15));
   if (wave === FINAL_WAVE) {
-    add("colossal", 1, () => 50);
+    // the last stand: the Founding Titan leads a war-hammer escort, with beasts and Reiss behind
+    add("founding", 1, () => 60);
+    add("hammer", 2, () => rnd(32, 36));
+    add("beast", 2, () => rnd(26, 30));
     add("reiss", 1, () => 46);
   }
-  const title = wave === FINAL_WAVE ? "Final Wave" : abnormals ? `${abnormals} Abnormal` : "Titans";
+  const title = wave === FINAL_WAVE ? "The Founding Titan" : abnormals ? `${abnormals} Abnormal` : "Titans";
   return { n: wave, title, spawns, colossalKick: false, breachReinforce };
 }
 
