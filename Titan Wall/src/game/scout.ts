@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { V3, clamp, damp, fwdOf, rightOf, turnToward } from "./math";
-import { buildScout } from "./models";
+import { buildScout, buildHorse } from "./models";
 import type { ScoutParts, ScoutPalette } from "./models";
 import { newContact } from "./world";
 import type { Sim } from "./types";
@@ -27,6 +27,8 @@ const BOOST_GAS = 1.2; // % per second (was 10: a full tank now lasts about a mi
 const REEL_ACC = 22;
 const REEL_SPEED = 16;
 const RUN_SPEED = 5.8;
+/** Ground pace multiplier while riding a horse. */
+export const RIDE_SPEED_MULT = 2.1;
 const CRASH_V = 24;
 const MAX_SPEED = 50;
 
@@ -168,6 +170,21 @@ export class Scout {
     this.crashScale = cfg.crashResist ?? 1;
     this.parts = buildScout(cfg.palette);
     this.model = this.parts.root;
+    if (cfg.isPlayer) {
+      this.horse = buildHorse();
+      this.model.add(this.horse);
+    }
+  }
+
+  /** Horses: the player can ride one from the supply (see game.toggleMount). */
+  horses = 0;
+  mounted = false;
+  horse: THREE.Group | null = null;
+
+  /** Mount or dismount. Riding doubles the ground pace and blocks the hooks, but costs no gas. */
+  setMounted(on: boolean) {
+    this.mounted = on;
+    if (this.horse) this.horse.visible = on;
   }
 
   get hasBlades() {
@@ -318,7 +335,7 @@ export class Scout {
     for (let s = 0; s < 2; s++) {
       const h = this.hooks[s];
       const f = ctrl.fire[s];
-      if (f && h.state === "idle" && h.cooldown <= 0 && this.stun <= 0) this.fireHook(s, f, sim);
+      if (f && h.state === "idle" && h.cooldown <= 0 && this.stun <= 0 && !this.mounted) this.fireHook(s, f, sim);
       if (!ctrl.hold[s] && h.state !== "idle") this.releaseHook(s);
       if (h.state === "idle") continue;
       if (h.titan) {
@@ -417,8 +434,9 @@ export class Scout {
 
     // ---- ground run
     if (this.grounded && !stunned && !this.boosting) {
-      const tx = hasMove ? mv.x * RUN_SPEED : 0;
-      const tz = hasMove ? mv.z * RUN_SPEED : 0;
+      const runSp = this.mounted ? RUN_SPEED * RIDE_SPEED_MULT : RUN_SPEED;
+      const tx = hasMove ? mv.x * runSp : 0;
+      const tz = hasMove ? mv.z * runSp : 0;
       const dx = tx - this.vel.x;
       const dz = tz - this.vel.z;
       const len = Math.hypot(dx, dz);
@@ -544,6 +562,7 @@ export class Scout {
   syncModel(dt: number, sim: Sim) {
     const m = this.parts;
     this.model.position.copy(this.pos);
+    if (this.mounted) this.model.position.y += 0.95; // the rider sits on the saddle
     if (!this.alive) return;
     m.root.rotation.y = this.yaw;
     const hs = Math.hypot(this.vel.x, this.vel.z);

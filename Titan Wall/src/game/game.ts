@@ -74,6 +74,8 @@ export interface Snapshot {
   waveTimer: number;
   clock: string;
   period: string;
+  horses: number;
+  mounted: boolean;
   intro: { kicker: string; title: string; body: string; forecast: string; left: number } | null;
   mapOpen: boolean;
   grabbed: boolean;
@@ -113,6 +115,9 @@ const _r = new V3();
 const _aimO = new V3();
 
 /** Damage a glancing (sub-clean) nape cut does to plated titans. Plated kinds need a 1.35× clean cut to die. */
+/** Horses: carry up to two, one more every 25 s at a depot. */
+const MAX_HORSES = 2;
+const HORSE_RESTOCK_S = 25;
 /** Extra Survey Corps scouts that patrol Wall Maria with the squad (the named five are always there). */
 const EXTRA_SCOUTS = 50;
 const RECRUIT_THINK_EVERY = 12;
@@ -184,6 +189,7 @@ export class Game implements Sim {
   private noticedAbnormal = new Set<number>();
   private scanT = 0;
   private resupT = new Map<string, number>();
+  private horseT = 0;
   private resupMsgT = 0;
   private resupplying = false;
   private aim: { hit: RayHit | null; point: V3 } = { hit: null, point: new V3() };
@@ -383,6 +389,7 @@ export class Game implements Sim {
       if (e.code === "Space") this.pendStruggle = true;
       if (e.code === "KeyP") this.pause();
       if (e.code === "Tab") this.toggleMap();
+      if (e.code === "KeyH") this.toggleMount();
       if (e.code === "KeyM") this.sfx.toggleMute();
     });
     on(window, "keyup", (e) => {
@@ -508,6 +515,9 @@ export class Game implements Sim {
     const sp = this.world.playerSpawn;
     this.applyStats();
     this.player.reset(_v.set(sp.x, 1, sp.z));
+    this.player.setMounted(false);
+    this.player.horses = 1; // one horse waits in the supply at the start of a run
+    this.horseT = 0;
     this.player.kills = 0;
     this.player.spears = 2;
     this.spearT = 0;
@@ -1165,6 +1175,14 @@ export class Game implements Sim {
           s.spare++;
           this.resupT.set(s.id, 0);
         } else this.resupT.set(s.id, t);
+        if (s.isPlayer && !s.mounted) {
+          this.horseT += dt;
+          if (this.horseT >= HORSE_RESTOCK_S && s.horses < MAX_HORSES) {
+            s.horses++;
+            this.horseT = 0;
+            this.toast(`Horse restocked (${s.horses}/${MAX_HORSES})`, "good");
+          }
+        }
         if (s.isPlayer) {
           this.resupplying = true;
           this.spearT += dt;
@@ -1189,7 +1207,7 @@ export class Game implements Sim {
     const cp = Math.cos(this.camPitch);
     _f.set(Math.sin(this.camYaw) * cp, Math.sin(this.camPitch), Math.cos(this.camYaw) * cp);
     _r.set(-Math.cos(this.camYaw), 0, Math.sin(this.camYaw));
-    _v.set(p.pos.x, p.pos.y + 0.9, p.pos.z);
+    _v.set(p.pos.x, p.pos.y + 0.9 + (p.mounted ? 0.95 : 0), p.pos.z);
     this.camTarget.lerp(_v, 1 - Math.exp(-22 * dt));
     const wantDist = 8 + clamp(p.speed * 0.07, 0, 6);
     this.camDist = damp(this.camDist, wantDist, 4, dt);
@@ -1229,6 +1247,32 @@ export class Game implements Sim {
 
   skipIntro() {
     this.intro = null;
+  }
+
+  /**
+   * H: take a horse from the supply and ride it, or dismount (the horse is left behind, so the supply
+   * matters). Riding needs solid ground under you and a free grip, and it blocks the hooks.
+   */
+  toggleMount() {
+    if (this.phase !== "playing") return;
+    const p = this.player;
+    if (!p.alive || p.grabbedBy) return;
+    if (p.mounted) {
+      p.setMounted(false);
+      this.toast("You dismount and leave the horse behind", "info");
+      return;
+    }
+    if (p.horses <= 0) {
+      this.toast("No horses left — restock at a supply depot", "bad");
+      return;
+    }
+    if (!p.grounded) {
+      this.toast("Land first, then ride", "info");
+      return;
+    }
+    p.horses--;
+    p.setMounted(true);
+    this.toast("Mounted — H to dismount. Riding is fast, but the hooks are off.", "good");
   }
 
   toggleMap() {
@@ -1560,6 +1604,8 @@ export class Game implements Sim {
       deathCause: this.deathCause,
       intro: this.intro ? { kicker: this.intro.kicker, title: this.intro.title, body: this.intro.body, forecast: this.intro.forecast, left: this.intro.t / INTRO_SECONDS } : null,
       mapOpen: this.mapOpen,
+      horses: p.horses,
+      mounted: p.mounted,
       clock: clockLabel(this.dayT),
       period: periodName(this.dayT),
     };

@@ -337,3 +337,41 @@ export function buildTitan(
   }
   return parts;
 }
+
+/** A simple saddled horse, built from boxes and cylinders. Its origin is the ground under its belly. */
+export function buildHorse(): THREE.Group {
+  const g = new THREE.Group();
+  g.name = "horse";
+  const coat = new THREE.MeshStandardMaterial({ color: 0x6b4226, roughness: 0.85 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x2a1b10, roughness: 0.9 });
+  const leather = new THREE.MeshStandardMaterial({ color: 0x4a2f1a, roughness: 0.7 });
+  const add = (geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number, rx = 0, rz = 0) => {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, y, z);
+    m.rotation.set(rx, 0, rz);
+    m.castShadow = true;
+    g.add(m);
+    return m;
+  };
+  // body and chest
+  add(new THREE.BoxGeometry(0.9, 0.8, 2.0), coat, 0, 1.45, 0);
+  add(new THREE.BoxGeometry(0.7, 0.7, 0.6), coat, 0, 1.5, 1.2);
+  // neck and head, angled forward
+  add(new THREE.BoxGeometry(0.34, 0.9, 0.42), coat, 0, 2.0, 1.55, -0.5);
+  add(new THREE.BoxGeometry(0.3, 0.42, 0.7), coat, 0, 2.3, 2.0, -0.2);
+  add(new THREE.BoxGeometry(0.16, 0.12, 0.24), dark, 0, 2.23, 2.4);
+  // ears
+  add(new THREE.BoxGeometry(0.08, 0.2, 0.08), dark, -0.08, 2.6, 1.85);
+  add(new THREE.BoxGeometry(0.08, 0.2, 0.08), dark, 0.08, 2.6, 1.85);
+  // tail
+  add(new THREE.BoxGeometry(0.12, 0.7, 0.12), dark, 0, 1.6, -1.2, 0.35);
+  // legs
+  for (const [x, z] of [[-0.3, 0.8], [0.3, 0.8], [-0.3, -0.8], [0.3, -0.8]] as const) {
+    add(new THREE.CylinderGeometry(0.1, 0.08, 1.1, 6), dark, x, 0.55, z);
+  }
+  // saddle and stirrup
+  add(new THREE.BoxGeometry(0.7, 0.14, 0.9), leather, 0, 1.92, 0.1);
+  add(new THREE.BoxGeometry(0.06, 0.3, 0.06), leather, 0.42, 1.3, 0.1);
+  g.visible = false;
+  return g;
+}

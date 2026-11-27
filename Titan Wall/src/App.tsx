@@ -45,6 +45,7 @@ const CONTROLS: [React.ReactNode, string][] = [
   [<><Key>W</Key><Key>A</Key><Key>S</Key><Key>D</Key></>, "Run / steer in the air"],
   [<Key>MOUSE</Key>, "Look (arrow keys also work)"],
   [<Key wide>TAB</Key>, "Open the map: districts, depots, teammates and titans"],
+  [<Key>H</Key>, "Mount a horse from your supply (H again to dismount)"],
   [<Key>M</Key>, "Mute / unmute sound"],
 ];
 
@@ -709,6 +710,10 @@ export default function App() {
                   Hooks:{" "}
                   <b className={s.hooks[0] === "attached" ? "text-emerald-300" : ""}>L {s.hooks[0] === "idle" ? "—" : s.hooks[0]}</b> ·{" "}
                   <b className={s.hooks[1] === "attached" ? "text-emerald-300" : ""}>R {s.hooks[1] === "idle" ? "—" : s.hooks[1]}</b>
+                  {" · "}
+                  <b className={s.mounted ? "text-amber-300" : ""}>
+                    {s.mounted ? "RIDING (H)" : `HORSE ×${s.horses}${s.horses ? " (H)" : ""}`}
+                  </b>
                 </span>
                 {s.resupplying && <span className="animate-pulse font-bold text-cyan-300">RESUPPLYING…</span>}
                 <span>{touch ? "HOOK L/R · SLASH · BOOST · SPEAR · RELOAD" : "Q/E hooks · LMB slash · SPACE boost · SHIFT reel · R blades · F spear"}</span>
