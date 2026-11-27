@@ -24,7 +24,7 @@ export function TouchPad({ game, onPause }: { game: Game; onPause: () => void })
   const lookId = useRef<number | null>(null);
   const lookLast = useRef({ x: 0, y: 0 });
   const padRef = useRef<HTMLDivElement>(null);
-  const R = 56; // stick radius in px
+  const R = 42; // stick radius in px (matches the 120 px base)
 
   useEffect(() => {
     game.touch.active = true;
@@ -117,7 +117,7 @@ export function TouchPad({ game, onPause }: { game: Game; onPause: () => void })
     >
       {/* move stick, bottom-left */}
       <div
-        className="absolute bottom-6 left-6 flex h-40 w-40 items-center justify-center rounded-full border border-white/25 bg-black/25"
+        className="absolute bottom-6 left-6 flex h-[120px] w-[120px] items-center justify-center rounded-full border border-white/25 bg-black/25"
         onPointerDown={onStickDown}
         onPointerMove={onStickMove}
         onPointerUp={onStickUp}
@@ -125,7 +125,7 @@ export function TouchPad({ game, onPause }: { game: Game; onPause: () => void })
         style={{ touchAction: "none" }}
       >
         <div
-          className="h-16 w-16 rounded-full border border-white/40 bg-white/25"
+          className="h-12 w-12 rounded-full border border-white/40 bg-white/25"
           style={{ transform: stick ? `translate(${stick.x}px, ${stick.y}px)` : undefined }}
         />
       </div>

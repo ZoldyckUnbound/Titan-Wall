@@ -358,7 +358,8 @@ export default function App() {
 
           {/* minimap */}
           <div className="absolute right-3 top-3">
-            <div className="rounded-md border border-white/20 bg-black/40 p-1">
+            {/* phones: the touch buttons fill the right edge, so the minimap is hidden (the canvas stays mounted) */}
+            <div className={`rounded-md border border-white/20 bg-black/40 p-1 ${touch ? "hidden" : ""}`}>
               <canvas ref={miniRef} width={168} height={168} className="block h-[168px] w-[168px] rounded" />
             </div>
             <div className="mt-1 flex justify-between px-1 font-mono text-[11px] text-slate-200">
