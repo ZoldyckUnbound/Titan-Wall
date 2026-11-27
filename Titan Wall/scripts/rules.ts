@@ -2,6 +2,8 @@
  *  - healing only ticks above 75 HP, and it is slow,
  *  - a depot gives nothing while a titan is too close, and works again once the titan is gone. */
 import { Game } from "../src/game/game";
+import { Titan } from "../src/game/titan";
+import { Vector3 as V } from "three";
 
 let fails = 0;
 const check = (ok: boolean, msg: string) => {
@@ -45,7 +47,6 @@ check(openGas > 10, `depot restores gas when clear (${openGas.toFixed(1)})`);
 
 // 3. same depot with a titan standing next to it: nothing happens
 p.gas = 10; p.spare = 0; p.hp = 90;
-const { Titan } = await import("../src/game/titan");
 const _unused = 0; void _unused;
 const t = new Titan(12, false, new (await import("three")).Vector3(dep.pos.x + 10, 0, dep.pos.z));
 g.titans.push(t);
@@ -54,7 +55,6 @@ for (let i = 0; i < 120; i++) { p.pos.set(dep.pos.x, 1, dep.pos.z); t.pos.set(de
 check(p.gas < openGas, `depot locked while a titan is close (gas ${p.gas.toFixed(1)})`);
 check(p.spare === 0, "no blade resupply while locked");
 // 4. grab rules: no grab while another titan is in arm's reach, and none right after a release
-const V = (await import("three")).Vector3;
 const sc = g.player;
 const t1 = new Titan(12, false, new V(dep.pos.x + 300, 0, dep.pos.z));
 const t2 = new Titan(12, false, new V(dep.pos.x + 306, 0, dep.pos.z));
@@ -74,5 +74,61 @@ g2.start(0);
 check(g2.wave === 1, "start(0) clamps to wave 1");
 g2.start(999);
 check(g2.wave === 60, "start(999) clamps to the final wave 60");
+// 6. hitboxes: limb volumes follow the animated rig, and scouts are pushed off them
+const g3 = new Game({ onToast: () => {} });
+g3.start();
+const T3 = new Titan(12, false, new V(-6000, 0, -6000));
+g3.titans.splice(0);
+g3.titans.push(T3);
+g3.scene.add(T3.model);
+T3.state = "recover";
+(T3 as any).recDur = 99;
+for (let i = 0; i < 30; i++) { T3.update(1 / 60, g3 as any); }
+const elbow = (T3.parts as any).elbowL as import("three").Object3D;
+const ep = new V(); elbow.getWorldPosition(ep);
+const limb = T3.spheres.find((x) => x.kind === "arm")!;
+check(limb.c.distanceTo(ep) < 1e-3, "elbow hit volume sits on the elbow joint");
+const knee = (T3.parts as any).kneeR as import("three").Object3D;
+const kp = new V(); knee.getWorldPosition(kp);
+const kn = T3.spheres[5 + 3]; // right knee (limb volumes follow elbowL, elbowR, kneeL, kneeR)
+check(kn.c.distanceTo(kp) < 1e-3 && kn.r > 0, "knee hit volume sits on the knee joint");
+const sc3 = g3.player;
+g3.brains.forEach((b) => (b.scout.alive = false));
+sc3.invuln = 99;
+sc3.pos.set(kp.x, kp.y, kp.z);
+sc3.vel.set(0, 0, 0);
+g3.update(1 / 60);
+const dk = sc3.pos.distanceTo(kn.c);
+check(dk >= kn.r, `scout pushed off a knee volume (distance ${dk.toFixed(2)} >= radius ${kn.r.toFixed(2)})`);
+// 7. thunder spears: a hit pins and damages a titan; ammo is limited and restocked at depots
+const g4 = new Game({ onToast: () => {} });
+g4.start();
+g4.titans.splice(0);
+g4.brains.forEach((b) => (b.scout.alive = false));
+const T4 = new Titan(12, false, new V(-6000, 0, -6000));
+g4.titans.push(T4);
+g4.scene.add(T4.model);
+T4.state = "recover";
+(T4 as any).recDur = 99;
+const p4 = g4.player;
+p4.invuln = 99;
+p4.spears = 1;
+p4.pos.set(-6000, 6, -6030);
+g4.camYaw = 0;
+g4.camPitch = 0;
+const hp0 = T4.hp;
+(g4 as any).pendSpear = true;
+g4.update(1 / 60);
+check(p4.spears === 0, "throwing uses one spear");
+check(T4.state === "stunned" && T4.hp < hp0, `spear pins the titan and hurts it (hp ${hp0} -> ${T4.hp.toFixed(0)})`);
+(g4 as any).pendSpear = true;
+g4.update(1 / 60);
+check(p4.spears === 0, "no spear thrown with none left");
+const dep4 = g4.world.depots[0];
+p4.spears = 0;
+(g4 as any).spearT = 0;
+p4.pos.set(dep4.pos.x, 1, dep4.pos.z);
+for (let i = 0; i < 60 * 7; i++) { p4.pos.set(dep4.pos.x, 1, dep4.pos.z); g4.update(1 / 60); }
+check(p4.spears >= 1, `depot restocks a thunder spear (now ${p4.spears})`);
 console.log(fails ? `${fails} FAILED` : "ALL PASSED");
 process.exit(fails ? 1 : 0);

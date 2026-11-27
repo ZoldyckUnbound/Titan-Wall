@@ -23,8 +23,16 @@ export type TitanState =
 export interface HitSphere {
   c: THREE.Vector3;
   r: number;
-  kind: "head" | "torso" | "pelvis" | "legs" | "nape";
+  kind: "head" | "torso" | "pelvis" | "legs" | "nape" | "arm" | "knee";
 }
+
+// elbows and knees: [joint name in TitanParts, hit kind, radius in unit-height space]
+const LIMB_JOINTS: { joint: "elbowL" | "elbowR" | "kneeL" | "kneeR"; kind: HitSphere["kind"]; r: number }[] = [
+  { joint: "elbowL", kind: "arm", r: 0.06 },
+  { joint: "elbowR", kind: "arm", r: 0.06 },
+  { joint: "kneeL", kind: "knee", r: 0.085 },
+  { joint: "kneeR", kind: "knee", r: 0.085 },
+];
 
 // unit-height-space body hit volumes (nape handled separately)
 const BODY_SPHERES: { kind: HitSphere["kind"]; y: number; z: number; r: number }[] = [
@@ -118,6 +126,8 @@ export class Titan {
     this.model.position.copy(pos);
     for (let i = 0; i < BODY_SPHERES.length + 1; i++)
       this.spheres.push({ c: new V3(), r: 1, kind: i === 0 ? "nape" : BODY_SPHERES[i - 1].kind });
+    // limb volumes: elbows and knees follow the animated rig (see updateLimbs)
+    for (let i = 0; i < LIMB_JOINTS.length; i++) this.spheres.push({ c: new V3(), r: 1, kind: LIMB_JOINTS[i].kind });
     this.updateSpheres();
   }
 
@@ -181,6 +191,15 @@ export class Titan {
       this.st = 0;
       this.recDur = 1.4;
     }
+  }
+
+  /** A thunder spear pins the titan in place. It does not pin a titan that is holding someone. */
+  pin(sec: number) {
+    if (!this.alive || this.grabbed || this.state === "eating") return;
+    this.state = "stunned";
+    this.stunT = sec;
+    this.st = 0;
+    this.target = null;
   }
 
   breakFree() {
@@ -372,6 +391,19 @@ export class Titan {
     this.integrate(dt, sim);
     this.updateSpheres();
     this.animate(dt, sim);
+    this.updateLimbs();
+  }
+
+  /** Limb hit volumes sit on the animated elbows and knees, so swats and slashes land where the limb is. */
+  private updateLimbs() {
+    this.model.updateMatrixWorld(true);
+    const P = this.parts;
+    LIMB_JOINTS.forEach((L, i) => {
+      const s = this.spheres[BODY_SPHERES.length + 1 + i];
+      const j = P[L.joint];
+      if (j) j.getWorldPosition(s.c);
+      s.r = L.r * this.height;
+    });
   }
 
   private doWander(dt: number, sim: Sim) {
@@ -685,6 +717,7 @@ export class Titan {
     this.yaw = turnToward(this.yaw, Math.atan2(dx, dz), this.turnRate * dt);
     this.integrate(dt, sim);
     this.updateSpheres();
+    this.updateLimbs();
     this.parts.root.position.copy(this.pos);
     this.parts.root.rotation.y = this.yaw;
   }

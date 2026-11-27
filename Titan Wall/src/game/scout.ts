@@ -22,13 +22,13 @@ export const GRAVITY = 19;
 export const SCOUT_R = 0.85;
 export const HOOK_RANGE = 200;
 const HOOK_SPEED = 260;
-const BOOST_ACC = 34;
+const BOOST_ACC = 30;
 const BOOST_GAS = 10; // % per second
 const REEL_ACC = 22;
 const REEL_SPEED = 16;
-const RUN_SPEED = 6.5;
+const RUN_SPEED = 5.8;
 const CRASH_V = 24;
-const MAX_SPEED = 58;
+const MAX_SPEED = 50;
 
 export class Hook {
   state: "idle" | "flying" | "attached" = "idle";
@@ -111,6 +111,9 @@ export class Scout {
   bladeDur = 100;
   spare = 3;
   maxSpare = 4;
+  /** Thunder spears (player only): thrown along the aim, pin a titan for a few seconds. */
+  spears = 0;
+  maxSpears = 3;
   swapT = 0;
   slashT = 0;
   slashDur = 0.42;

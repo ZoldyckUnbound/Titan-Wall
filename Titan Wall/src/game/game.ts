@@ -56,6 +56,7 @@ export interface Snapshot {
   gas: number;
   blade: number;
   spare: number;
+  spears: number;
   swap: number;
   speed: number;
   killSpeed: number;
@@ -124,6 +125,8 @@ export class Game implements Sim {
   private pendFire = [0, 0];
   private pendSlash = false;
   private pendSwap = false;
+  private pendSpear = false;
+  private spearT = 0;
   private pendStruggle = false;
   private camYaw = 0;
   private camPitch = -0.12;
@@ -315,6 +318,7 @@ export class Game implements Sim {
       if (e.repeat) return;
       this.keys.add(e.code);
       if (e.code === "KeyR") this.pendSwap = true;
+      if (e.code === "KeyE") this.pendSpear = true;
       if (e.code === "KeyF" || e.code === "KeyQ") this.pendSlash = true;
       if (e.code === "Space") this.pendStruggle = true;
       if (e.code === "KeyP") this.pause();
@@ -437,6 +441,8 @@ export class Game implements Sim {
     const sp = this.world.playerSpawn;
     this.player.reset(_v.set(sp.x, 1, sp.z));
     this.player.kills = 0;
+    this.player.spears = 2;
+    this.spearT = 0;
     this.camYaw = 0;
     this.camPitch = -0.12;
     this.brains.forEach((b, i) => {
@@ -892,6 +898,7 @@ export class Game implements Sim {
       if (s.slashing) this.resolveSlash(s);
     }
 
+    this.throwSpear();
     this.depots(dt);
     for (const s of this.scouts) s.syncModel(dt, this);
     this.audioFrame();
@@ -957,6 +964,35 @@ export class Game implements Sim {
     }
   }
 
+  /** Thunder spear: a hitscan along the camera aim. A hit on a titan pins it for five seconds and costs it a little HP. */
+  private throwSpear() {
+    if (!this.pendSpear) return;
+    this.pendSpear = false;
+    const p = this.player;
+    if (!p.alive || p.grabbedBy) return;
+    if (p.spears <= 0) {
+      this.toast("No thunder spears — restock at a depot", "bad");
+      return;
+    }
+    p.spears--;
+    const cp = Math.cos(this.camPitch);
+    const dir = new V3(Math.sin(this.camYaw) * cp, Math.sin(this.camPitch), Math.cos(this.camYaw) * cp).normalize();
+    const origin = new V3(p.pos.x, p.pos.y + 0.9, p.pos.z);
+    const hit = this.rayWorld(origin, dir, 320, true);
+    this.noise(p.pos, 30, p);
+    this.shake = Math.max(this.shake, 0.4);
+    if (hit && hit.kind === "titan" && hit.titan && hit.titan.alive) {
+      const t = hit.titan;
+      t.hp = Math.max(1, t.hp - 45);
+      t.pin(5);
+      this.fx.sparks(hit.point, 20, [0.6, 0.85, 1]);
+      this.toast(t.grabbed ? "The spear hit — but the Titan is holding a squadmate!" : "THUNDER SPEAR — Titan pinned!", "good");
+    } else if (hit) {
+      this.fx.sparks(hit.point, 6, [0.6, 0.85, 1]);
+      this.toast("Spear missed — it hit the city", "info");
+    } else this.toast("Spear missed", "info");
+  }
+
   private depots(dt: number) {
     this.resupplying = false;
     for (const s of this.scouts) {
@@ -979,7 +1015,15 @@ export class Game implements Sim {
           s.spare++;
           this.resupT.set(s.id, 0);
         } else this.resupT.set(s.id, t);
-        if (s.isPlayer) this.resupplying = true;
+        if (s.isPlayer) {
+          this.resupplying = true;
+          this.spearT += dt;
+          if (this.spearT >= 6 && s.spears < s.maxSpears) {
+            s.spears++;
+            this.spearT = 0;
+            this.toast(`Thunder spear restocked (${s.spears}/${s.maxSpears})`, "good");
+          }
+        }
         break;
       }
     }
@@ -1268,6 +1312,7 @@ export class Game implements Sim {
       gas: p.gas,
       blade: p.bladeDur,
       spare: p.spare,
+      spears: p.spears,
       swap: p.swapT > 0 ? 1 - p.swapT / 1.1 : 0,
       speed: p.speed,
       killSpeed: p.killSpeed,

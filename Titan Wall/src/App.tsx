@@ -37,6 +37,7 @@ const CONTROLS: [React.ReactNode, string][] = [
   [<Key wide>SHIFT</Key>, "Reel in the rope — free speed, no gas"],
   [<><Key>F</Key> <Key>Q</Key></>, "Slash — needs speed at the nape to kill"],
   [<Key>R</Key>, "Swap dull blades (works mid-air)"],
+  [<Key>E</Key>, "Throw a thunder spear along your aim (pins a Titan)"],
   [<><Key>W</Key><Key>A</Key><Key>S</Key><Key>D</Key></>, "Run / steer in the air"],
   [<Key>MOUSE</Key>, "Look (arrow keys also work)"],
   [<Key>M</Key>, "Mute / unmute sound"],
@@ -433,6 +434,11 @@ export default function App() {
                         <span key={i} className={`h-2.5 w-1 rounded-sm ${i < s.spare ? "bg-slate-100" : "bg-white/15"}`} />
                       ))}
                     </span>
+                    <span className="ml-2 flex items-center gap-1 text-[10px] text-sky-200" title="Thunder spears (E)">
+                      {[0, 1, 2].map((i) => (
+                        <span key={i} className={`h-3 w-0.5 rounded-sm ${i < s.spears ? "bg-sky-300" : "bg-white/15"}`} />
+                      ))}
+                    </span>
                   </div>
                   <Bar
                     value={s.swap > 0 ? s.swap * 100 : s.blade}
@@ -458,7 +464,7 @@ export default function App() {
                   <b className={s.hooks[1] === "attached" ? "text-emerald-300" : ""}>R {s.hooks[1] === "idle" ? "—" : s.hooks[1]}</b>
                 </span>
                 {s.resupplying && <span className="animate-pulse font-bold text-cyan-300">RESUPPLYING…</span>}
-                <span>LMB/RMB hook · SPACE boost · SHIFT reel · F slash · R blades</span>
+                <span>LMB/RMB hook · SPACE boost · SHIFT reel · F slash · R blades · E spear</span>
               </div>
             </div>
           </div>
