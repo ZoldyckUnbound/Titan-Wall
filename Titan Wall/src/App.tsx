@@ -563,6 +563,15 @@ export default function App() {
         </div>
       )}
 
+      {/* phones in portrait: the controls are laid out for landscape, so ask for a turn (CSS-only, shows on rotate) */}
+      {touch && (phase === "playing" || phase === "paused") && (
+        <div className="absolute inset-0 z-40 hidden flex-col items-center justify-center gap-3 bg-slate-950/95 p-8 text-center portrait:flex">
+          <div className="text-4xl">⟳</div>
+          <div className="text-lg font-bold tracking-wider text-white">Turn your phone sideways</div>
+          <div className="max-w-xs text-sm text-slate-300">Titan Wall is played in landscape, with the controls on each side of the screen.</div>
+        </div>
+      )}
+
       {/* on-screen controls for phones and tablets */}
       {s && phase === "playing" && touch && gameRef.current && (
         <TouchPad game={gameRef.current} onPause={() => gameRef.current?.pause()} />

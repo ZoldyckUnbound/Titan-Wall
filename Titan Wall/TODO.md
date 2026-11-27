@@ -30,4 +30,5 @@
   - Still to do: listen-test in a browser and tune the levels.
 - [~] **Mobile support:** touch controls that are easy to play.
   - Done: on-screen move stick, look drag, BOOST, HOOK L/R (hold keeps the rope), SLASH, SPEAR, RELOAD, GRAB, PAUSE (src/Touch.tsx). Touch tutorial copy, minimap hidden on phones, HUD bars clear of the buttons. Checked in headless Chromium at 844×390 (no console errors) and in scripts/touch.ts.
-  - Still to do: check on a real phone; narrow screens (under ~700 px) will still crowd the HUD; sensitivity settings; landscape-only lock.
+  - Portrait phones get a "turn your phone sideways" overlay during a run (CSS only; checked in headless Chromium at 390×844).
+  - Still to do: check on a real phone; sensitivity settings; very narrow landscape screens will still crowd the HUD.
