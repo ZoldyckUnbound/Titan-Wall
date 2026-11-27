@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import type { Box } from "./world";
 
 class MinHeap {
   keys: number[] = [];
@@ -52,14 +53,14 @@ class MinHeap {
 }
 
 /**
- * Coarse 2D navigation grid over the whole map. Each cell stores the tallest solid in it.
- * Walkers (titans) treat anything above ~0.5 m as blocked; the cells are re-computed when a
- * building collapses so titans can path through the rubble.
+ * Coarse 2D navigation grid storing the tallest obstacle in each cell.
+ * Walkers (titans) treat every building as blocked (maxH ~ 0); flyers (ODM scouts)
+ * treat only buildings taller than their cruising altitude as blocked.
  */
 export class NavGrid {
-  readonly cell: number;
-  readonly n: number;
-  readonly origin: number;
+  readonly cell = 3;
+  readonly n = 84;
+  readonly origin = -126;
   height: Float32Array;
   private g: Float32Array;
   private parent: Int32Array;
@@ -68,16 +69,24 @@ export class NavGrid {
   private curStamp = 0;
   private heap = new MinHeap();
 
-  constructor(halfExtent: number, cell = 20) {
-    this.cell = cell;
-    this.n = Math.ceil((halfExtent * 2) / cell);
-    this.origin = -halfExtent;
+  constructor(boxes: Box[]) {
     const N = this.n * this.n;
     this.height = new Float32Array(N);
     this.g = new Float32Array(N);
     this.parent = new Int32Array(N);
     this.stamp = new Int32Array(N);
     this.closed = new Uint8Array(N);
+    for (const b of boxes) {
+      const x0 = this.cx(b.min.x);
+      const x1 = this.cx(b.max.x);
+      const z0 = this.cx(b.min.z);
+      const z1 = this.cx(b.max.z);
+      for (let z = z0; z <= z1; z++)
+        for (let x = x0; x <= x1; x++) {
+          const i = z * this.n + x;
+          if (b.max.y > this.height[i]) this.height[i] = b.max.y;
+        }
+    }
   }
 
   cx(v: number) {
@@ -85,10 +94,6 @@ export class NavGrid {
   }
   center(i: number) {
     return this.origin + (i + 0.5) * this.cell;
-  }
-  /** Cell index range covering [a,b] along one axis. */
-  range(a: number, b: number): [number, number] {
-    return [this.cx(a), this.cx(b)];
   }
 
   blocked(ix: number, iz: number, maxH: number, infl: number) {
@@ -104,7 +109,7 @@ export class NavGrid {
 
   nearestFree(ix: number, iz: number, maxH: number, infl: number): [number, number] | null {
     if (!this.blocked(ix, iz, maxH, infl)) return [ix, iz];
-    for (let r = 1; r < 14; r++) {
+    for (let r = 1; r < 24; r++) {
       let best: [number, number] | null = null;
       let bd = 1e9;
       for (let dz = -r; dz <= r; dz++)
@@ -125,6 +130,7 @@ export class NavGrid {
     return null;
   }
 
+  /** True if a straight line between two cells never touches a blocked cell. */
   private los(ax: number, az: number, bx: number, bz: number, maxH: number, infl: number) {
     const dx = bx - ax;
     const dz = bz - az;
@@ -138,46 +144,21 @@ export class NavGrid {
     return true;
   }
 
-  randomFree(maxH: number, infl: number, accept?: (x: number, z: number) => boolean, span = 0): THREE.Vector3 | null {
-    for (let k = 0; k < 120; k++) {
+  randomFree(maxH: number, infl: number, accept?: (x: number, z: number) => boolean): THREE.Vector3 | null {
+    for (let k = 0; k < 80; k++) {
       const ix = 4 + Math.floor(Math.random() * (this.n - 8));
       const iz = 4 + Math.floor(Math.random() * (this.n - 8));
       if (this.blocked(ix, iz, maxH, infl)) continue;
       const x = this.center(ix);
       const z = this.center(iz);
-      if (span && Math.hypot(x, z) > span) continue;
+      if (Math.abs(x) > 104 || Math.abs(z) > 104) continue;
       if (accept && !accept(x, z)) continue;
       return new THREE.Vector3(x, 0, z);
     }
     return null;
   }
 
-  /** A* searches left this frame (see beginFrame). */
-  private budget = 1e9;
-
-  /** Reset the per-frame A* budget. Searches beyond it return null and are retried on a later frame. */
-  beginFrame(searches = 3) {
-    this.budget = searches;
-  }
-
-  /** A random free point in the annulus [r0, r1] around (cx, cz). */
-  freeInRing(cx: number, cz: number, r0: number, r1: number, accept?: (x: number, z: number) => boolean, tries = 200): THREE.Vector3 | null {
-    for (let k = 0; k < tries; k++) {
-      const a = Math.random() * Math.PI * 2;
-      const r = Math.sqrt(r0 * r0 + Math.random() * (r1 * r1 - r0 * r0));
-      const x = cx + Math.cos(a) * r;
-      const z = cz + Math.sin(a) * r;
-      if (Math.abs(x) >= -this.origin || Math.abs(z) >= -this.origin) continue;
-      if (this.blocked(this.cx(x), this.cx(z), 0.5, 1)) continue;
-      if (accept && !accept(x, z)) continue;
-      return new THREE.Vector3(x, 0, z);
-    }
-    return null;
-  }
-
-  findPath(from: THREE.Vector3, to: THREE.Vector3, maxH: number, infl: number, guard = 8000): THREE.Vector3[] | null {
-    if (this.budget <= 0) return null;
-    this.budget--;
+  findPath(from: THREE.Vector3, to: THREE.Vector3, maxH: number, infl: number): THREE.Vector3[] | null {
     const sFree = this.nearestFree(this.cx(from.x), this.cx(from.z), maxH, infl);
     const gFree = this.nearestFree(this.cx(to.x), this.cx(to.z), maxH, infl);
     if (!sFree || !gFree) return null;
@@ -196,8 +177,8 @@ export class NavGrid {
     const gx = gFree[0];
     const gz = gFree[1];
     let found = false;
-    let steps = 0;
-    while (heap.size > 0 && steps++ < guard) {
+    let guard = 0;
+    while (heap.size > 0 && guard++ < 9000) {
       const cur = heap.pop();
       if (this.stamp[cur] === st && this.closed[cur] === 2) continue;
       this.closed[cur] = 2;

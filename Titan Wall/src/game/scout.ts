@@ -6,29 +6,14 @@ import { newContact } from "./world";
 import type { Sim } from "./types";
 import type { Titan } from "./titan";
 
-/**
- * ODM physics (modelled on the 3D manoeuvre gear of the series and the "realistic ODM" rules
- * of Danny's AOT):
- *  - Two hooks, one per hand. A hook fires along the aim, travels at finite speed and only
- *    anchors on buildings, walls, trees and titans — never on open ground.
- *  - Anchored cable is inextensible: it removes outward velocity, so you swing like a pendulum.
- *  - Reeling shortens the cable and costs no gas.
- *  - Gas is burnt only by boosting (a steady thrust toward the anchors or your aim). Hanging,
- *    swinging and reeling are free, which is what makes the gear feel like it does in the series.
- *  - Landing: the boost has a lift assist (it never pushes you into the ground while you aim down),
- *    and a boosted descent cushions the impact.
- */
-export const GRAVITY = 19;
+export const GRAVITY = 24;
 export const SCOUT_R = 0.85;
-export const HOOK_RANGE = 200;
-const HOOK_SPEED = 260;
-const BOOST_ACC = 34;
-const BOOST_GAS = 10; // % per second
-const REEL_ACC = 22;
-const REEL_SPEED = 16;
-const RUN_SPEED = 6.5;
-const CRASH_V = 24;
-const MAX_SPEED = 58;
+export const HOOK_RANGE = 75;
+const BOOST_ACC = 40;
+const REEL_ACC = 28;
+const RUN_SPEED = 9;
+const CRASH_V = 17;
+const MAX_SPEED = 64;
 
 export class Hook {
   state: "idle" | "flying" | "attached" = "idle";
@@ -42,7 +27,7 @@ export class Hook {
   missed = false;
 }
 
-/** The only interface between a driver (player input or bot AI) and the ODM physics. */
+/** The only interface between a "driver" (player input or bot AI) and the ODM physics. */
 export interface ScoutControl {
   move: THREE.Vector3; // desired horizontal move (world space, |v| <= 1)
   boost: boolean; // gas boost (Space)
@@ -84,8 +69,7 @@ export interface ScoutConfig {
   maxHp: number;
   killSpeed: number;
   dmgMult: number;
-  /** 1 = full collision damage. Squad mates use a small value: they are trained not to crash. */
-  crashResist?: number;
+  crashResist?: number; // 1 = full damage from collisions
 }
 
 const _t = new V3();
@@ -95,7 +79,6 @@ const _sum = new V3();
 const _n = new V3();
 const _f = new V3();
 const _r = new V3();
-const _ahead = new V3();
 
 export class Scout {
   readonly id: string;
@@ -113,7 +96,7 @@ export class Scout {
   maxSpare = 4;
   swapT = 0;
   slashT = 0;
-  slashDur = 0.42;
+  slashDur = 0.38;
   slashHit = false;
   stun = 0;
   invuln = 0;
@@ -122,8 +105,6 @@ export class Scout {
   alive = true;
   grabbedBy: Titan | null = null;
   struggle = 0;
-  /** Seconds left during which no titan may grab this scout (set after a release or death drop). */
-  grabImmune = 0;
   killSpeed: number;
   dmgMult: number;
   kills = 0;
@@ -136,10 +117,6 @@ export class Scout {
   speed = 0;
   maxImpactSeen = 0;
   msgCd = 0;
-  /** Seconds since the last boost; a recent boost cushions landings. */
-  sinceBoost = 99;
-  /** Seconds since being swatted; squad mates only take crash damage shortly after a swat. */
-  sinceSwat = 99;
   readonly contact = newContact();
   private noiseT = 0;
   private stepT = 0;
@@ -167,11 +144,10 @@ export class Scout {
     return this.slashT > 0 && !this.slashHit;
   }
 
-  reset(p: THREE.Vector3, yaw = 0) {
+  reset(p: THREE.Vector3) {
     this.pos.copy(p);
     this.pos.y = Math.max(this.pos.y, SCOUT_R);
     this.vel.set(0, 0, 0);
-    this.yaw = yaw;
     this.hp = this.maxHp;
     this.gas = this.maxGas;
     this.bladeDur = 100;
@@ -181,8 +157,6 @@ export class Scout {
     this.alive = true;
     this.grabbedBy = null;
     this.struggle = 0;
-    this.sinceBoost = 99;
-    this.sinceSwat = 99;
     this.model.visible = true;
     this.hooks.forEach((_, i) => this.releaseHook(i));
   }
@@ -208,7 +182,7 @@ export class Scout {
     h.state = "flying";
     h.tip.copy(o);
     h.age = 0;
-    if (hit && hit.kind !== "ground") {
+    if (hit) {
       h.anchor.copy(hit.point);
       h.missed = false;
       h.titan = hit.titan ?? null;
@@ -258,9 +232,6 @@ export class Scout {
     this.hurtFlash = Math.max(0, this.hurtFlash - dt);
     this.slashT = Math.max(0, this.slashT - dt);
     this.msgCd = Math.max(0, this.msgCd - dt);
-    this.sinceBoost += dt;
-    this.sinceSwat += dt;
-    this.grabImmune = Math.max(0, this.grabImmune - dt);
     if (this.swapT > 0) {
       this.swapT -= dt;
       if (this.swapT <= 0) {
@@ -277,14 +248,15 @@ export class Scout {
     }
 
     // ---- blades
-    if (ctrl.swap && this.swapT <= 0 && this.spare > 0 && this.bladeDur < 100) this.swapT = 1.2;
+    if (ctrl.swap && this.swapT <= 0 && this.spare > 0 && this.bladeDur < 100) this.swapT = 1.1;
     if (ctrl.slash && this.slashT <= 0 && this.swapT <= 0 && this.stun <= 0) {
       if (this.bladeDur > 0) {
         this.slashT = this.slashDur;
         this.slashHit = false;
       } else if (this.msgCd <= 0) {
         this.msgCd = 2;
-        if (this.isPlayer) sim.toast(this.spare > 0 ? "Blades broken — press R to swap!" : "No blades left — restock at a supply depot", "bad");
+        if (this.isPlayer) sim.toast(this.spare > 0 ? "Blades broken — press R to swap!" : "No blades left — find a supply depot!", "bad");
+        else sim.bark(this, "blades_broken");
       }
     }
 
@@ -303,7 +275,7 @@ export class Scout {
         h.titan.toWorld(h.local, h.anchor);
       }
       if (h.state === "flying") {
-        const step = HOOK_SPEED * dt;
+        const step = 175 * dt;
         const to = _t.subVectors(h.anchor, h.tip);
         const d = to.length();
         if (d <= step) {
@@ -316,7 +288,7 @@ export class Scout {
             h.age = 0;
             h.ropeLen = this.pos.distanceTo(h.anchor);
             sim.noise(h.anchor, 18, this);
-            sim.fx.sparks(h.anchor, 4, [0.9, 0.9, 0.85]);
+            if (!h.titan) sim.fx.sparks(h.anchor, 4, [0.9, 0.9, 0.85]);
           }
         } else h.tip.addScaledVector(to, step / d);
       } else {
@@ -342,7 +314,7 @@ export class Scout {
     const hasMove = !stunned && mv.lengthSq() > 0.01;
     this.boosting = false;
 
-    // ---- boost (the only thing that burns gas)
+    // boost
     if (ctrl.boost && this.gas > 0 && !stunned) {
       const dir = this.lastBoostDir;
       if (nAtt > 0) {
@@ -359,44 +331,39 @@ export class Scout {
           dir.normalize();
           this.vel.y = Math.max(this.vel.y, 8);
           this.grounded = false;
-        } else if (dir.y < 0.3) {
-          // lift assist: looking down still lifts you (and keeps your forward momentum)
-          dir.y = 0.3;
-          dir.normalize();
         }
       }
       _acc.addScaledVector(dir, BOOST_ACC);
-      this.gas = Math.max(0, this.gas - BOOST_GAS * dt);
+      this.gas = Math.max(0, this.gas - 11 * dt);
       this.boosting = true;
-      this.sinceBoost = 0;
       this.noiseT -= dt;
       if (this.noiseT <= 0) {
         this.noiseT = 0.45;
         sim.noise(this.pos, 42, this);
       }
     }
-    // ---- reel: shortens the cable, no gas
+    // reel
     if (ctrl.reel && !stunned) {
       for (const h of this.hooks) {
         if (h.state !== "attached") continue;
         const dist = _n.subVectors(h.anchor, this.pos).length();
         if (dist < 0.5) continue;
         _n.divideScalar(dist);
-        if (_u.copy(this.vel).dot(_n) < 26) _acc.addScaledVector(_n, REEL_ACC);
-        h.ropeLen = Math.max(2.5, Math.min(h.ropeLen, dist) - REEL_SPEED * dt);
+        if (_u.copy(this.vel).dot(_n) < 24) _acc.addScaledVector(_n, REEL_ACC);
+        h.ropeLen = Math.max(2.5, Math.min(h.ropeLen, dist) - 13 * dt);
       }
     }
-    // ---- air control (weak: the body is on a cable, not on legs)
-    if (!this.grounded && hasMove) _acc.addScaledVector(mv, nAtt > 0 ? 5 : 3);
+    // air control
+    if (!this.grounded && hasMove) _acc.addScaledVector(mv, 8);
 
-    // ---- ground run
+    // ground run
     if (this.grounded && !stunned && !this.boosting) {
       const tx = hasMove ? mv.x * RUN_SPEED : 0;
       const tz = hasMove ? mv.z * RUN_SPEED : 0;
       const dx = tx - this.vel.x;
       const dz = tz - this.vel.z;
       const len = Math.hypot(dx, dz);
-      const maxD = (hasMove ? 26 : 16) * dt;
+      const maxD = (hasMove ? 48 : 26) * dt;
       if (len <= maxD) {
         this.vel.x = tx;
         this.vel.z = tz;
@@ -406,8 +373,8 @@ export class Scout {
       }
     }
 
-    // ---- integrate in sub-steps (collisions need small steps at ODM speeds)
-    const steps = Math.min(6, Math.max(1, Math.ceil((dt * Math.max(10, this.speed)) / 0.6)));
+    // ---- integrate in sub-steps
+    const steps = Math.min(4, Math.max(1, Math.ceil(dt / 0.0111)));
     const h = dt / steps;
     let maxImpact = 0;
     let impactN = 0;
@@ -433,45 +400,40 @@ export class Scout {
     }
     this.grounded = this.contact.grounded;
 
-    // ---- drag / speed cap
+    // drag / speed cap
     const sp = this.vel.length();
     if (sp > 0.01) {
-      const drag = 0.035 + (sp > 36 ? 0.25 : 0);
+      const drag = 0.04 + (sp > 40 ? 0.35 : 0);
       this.vel.multiplyScalar(Math.max(0, 1 - drag * dt));
       if (sp > MAX_SPEED) this.vel.multiplyScalar(MAX_SPEED / sp);
     }
     this.speed = this.vel.length();
 
-    // ---- world bounds (the playable island interior)
-    const B = sim.world.bound - 2;
-    const r = Math.hypot(this.pos.x, this.pos.z);
-    if (r > B) {
-      const k = B / r;
-      this.pos.x *= k;
-      this.pos.z *= k;
-      this.vel.x *= 0.2;
-      this.vel.z *= 0.2;
+    // world bounds
+    const B = 150;
+    if (Math.abs(this.pos.x) > B) {
+      this.pos.x = Math.sign(this.pos.x) * B;
+      this.vel.x = 0;
     }
-    if (this.pos.y > 150) {
-      this.pos.y = 150;
+    if (Math.abs(this.pos.z) > B) {
+      this.pos.z = Math.sign(this.pos.z) * B;
+      this.vel.z = 0;
+    }
+    if (this.pos.y > 120) {
+      this.pos.y = 120;
       this.vel.y = Math.min(0, this.vel.y);
     }
 
-    // ---- impacts: a slow touchdown is a hard landing at worst; a boosted touchdown is cushioned
+    // impacts
     if (maxImpact > 7) sim.fx.dust(this.pos, maxImpact > CRASH_V ? 10 : 3);
-    const cushion = this.sinceBoost < 0.5 ? 0.45 : 1;
-    const eff = maxImpact * cushion;
-    if (eff > CRASH_V && this.invuln <= 0) {
-      const steep = impactN > 0.6 ? 1.0 : 2.0; // flat hits (walls) hurt more than landing on a roof
-      let dmg = Math.min(this.isPlayer ? 60 : 16, (eff - CRASH_V) * steep * this.crashScale);
-      // squad mates are trained not to crash — they only take damage from very violent impacts
-      if (!this.isPlayer && this.crashScale < 0.5 && eff < CRASH_V * 1.6) dmg = 0;
-      this.maxImpactSeen = eff;
+    if (maxImpact > CRASH_V && this.invuln <= 0) {
+      const dmg = Math.min(this.isPlayer ? 60 : 8, (maxImpact - CRASH_V) * (impactN > 0.6 ? 1.6 : 2.6) * this.crashScale);
+      this.maxImpactSeen = maxImpact;
       sim.noise(this.pos, 34, this);
-      if (dmg > 0) this.damage(dmg, "crash", sim);
-      this.invuln = Math.max(this.invuln, 0.5);
-      sim.onCrash(this, eff, dmg);
-      this.stun = Math.max(this.stun, eff > 36 ? 0.6 : 0.25);
+      this.damage(dmg, "crash", sim);
+      this.invuln = Math.max(this.invuln, 0.6);
+      sim.onCrash(this, maxImpact, dmg);
+      this.stun = Math.max(this.stun, maxImpact > 26 ? 0.6 : 0.25);
     }
     // footstep noise
     if (this.grounded && Math.hypot(this.vel.x, this.vel.z) > 5) {
@@ -482,22 +444,12 @@ export class Scout {
       }
     }
 
-    // ---- facing
+    // facing
     const hs = Math.hypot(this.vel.x, this.vel.z);
     let ty = this.yaw;
     if (this.grounded && hasMove) ty = Math.atan2(mv.x, mv.z);
     else if (!this.grounded && hs > 3) ty = Math.atan2(this.vel.x, this.vel.z);
-    this.yaw = turnToward(this.yaw, ty, 7 * dt);
-  }
-
-  /** Probe the path ahead for solid geometry. Returns the time-to-impact (s) or Infinity. */
-  lookAhead(sim: Sim, horizon: number) {
-    const sp = this.vel.length();
-    if (sp < 1) return Infinity;
-    _ahead.copy(this.vel).multiplyScalar(1 / sp);
-    const hit = sim.world.raycast(this.pos, _ahead, sp * horizon + 2);
-    if (!hit || hit.kind === "ground") return Infinity;
-    return hit.dist / sp;
+    this.yaw = turnToward(this.yaw, ty, 9 * dt);
   }
 
   private updateGrabbed(dt: number, ctrl: ScoutControl, sim: Sim) {
@@ -570,7 +522,11 @@ export class Scout {
         rightOf(this.yaw, _r);
         const back = _u.copy(this.lastBoostDir).multiplyScalar(-1);
         for (const s of [-1, 1]) {
-          _t.set(this.pos.x + _r.x * 0.32 * s - _f.x * 0.3, this.pos.y - 0.2, this.pos.z + _r.z * 0.32 * s - _f.z * 0.3);
+          _t.set(
+            this.pos.x + _r.x * 0.32 * s - _f.x * 0.3,
+            this.pos.y - 0.2,
+            this.pos.z + _r.z * 0.32 * s - _f.z * 0.3
+          );
           sim.fx.gasJet(_t, back);
         }
       }

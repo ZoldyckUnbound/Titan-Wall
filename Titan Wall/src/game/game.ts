@@ -15,7 +15,7 @@ import { MARIA_R, ROSE_R, wallRingAt } from "./lore";
 
 /** A depot is out of order while a titan is this close (game units). */
 const DEPOT_LOCK_R = 45;
-/** Healing only ticks above this HP, and it is slow (see healing()). */
+/** Passive regeneration only ticks above this HP, and it is slow (see healing()). Depots heal at any HP. */
 const HEAL_FLOOR = 75;
 /** Where wave-10's outside titans gather, south of Wall Maria at Shiganshina. */
 const OUTSIDE_HOME = { x: 0, z: MARIA_R + 230 };
@@ -971,7 +971,8 @@ export class Game implements Sim {
           break;
         }
         s.gas = Math.min(s.maxGas, s.gas + 12 * dt);
-        if (s.hp > HEAL_FLOOR) s.hp = Math.min(s.maxHp, s.hp + 1.2 * dt);
+        // depots heal at any HP (the passive regen above HEAL_FLOOR is separate)
+        s.hp = Math.min(s.maxHp, s.hp + 3 * dt);
         const t = (this.resupT.get(s.id) ?? 0) + dt;
         if (t > 3 && s.spare < s.maxSpare) {
           s.spare++;

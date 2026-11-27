@@ -27,6 +27,15 @@ for (let i = 0; i < 600; i++) { p.pos.set(dep.pos.x + 200, 1, dep.pos.z + 200); 
 const gain = p.hp - 80;
 check(gain > 0.5 && gain < 4, `slow healing above 75 HP (+${gain.toFixed(2)} in 10 s)`);
 
+// 1b. below 75 HP, passive healing is off but a depot still heals
+p.hp = 40;
+p.pos.set(dep.pos.x, 1, dep.pos.z);
+for (let i = 0; i < 300; i++) { p.pos.set(dep.pos.x, 1, dep.pos.z); g.update(1 / 60); }
+check(p.hp > 50, `depot heals below 75 HP (40 -> ${p.hp.toFixed(1)} in 5 s)`);
+p.hp = 40;
+for (let i = 0; i < 300; i++) { p.pos.set(dep.pos.x + 200, 1, dep.pos.z + 200); g.update(1 / 60); }
+check(p.hp === 40, "no passive healing below 75 HP away from a depot");
+
 // 2. depot: resupply + heal while no titan is near
 p.hp = 80; p.gas = 10; p.spare = 0;
 p.pos.set(dep.pos.x, 1, dep.pos.z);
