@@ -21,7 +21,22 @@ export interface TrackPlan {
   drumsAt: number;
   arp: number[]; // scale-degree indices for the arpeggio, one per 8th note (length 8)
   bass: number[]; // scale-degree indices for the bass, one per bar (length 4)
-  tone: "dread" | "drive" | "dark" | "choir" | "epic";
+  tone: "dread" | "drive" | "dark" | "choir" | "epic" | "hope";
+}
+
+/** The ending theme: a slow major-pentatonic resolution in D, separate from every wave's score. */
+export function endingPlan(): TrackPlan {
+  return {
+    wave: 61, // a value no wave uses, so the ending never counts as a repeat of a wave
+    season: "finale",
+    rootHz: 146.83,
+    mode: MODES.hope,
+    bpm: 72,
+    drumsAt: 2, // never: the ending has no percussion
+    arp: [0, 2, 4, 2, 3, 2, 1, 0],
+    bass: [0, 3, 4, 0],
+    tone: "hope",
+  };
 }
 
 const MODES: Record<TrackPlan["tone"], number[]> = {
@@ -30,6 +45,7 @@ const MODES: Record<TrackPlan["tone"], number[]> = {
   dark: [0, 1, 3, 5, 7, 8, 10], // phrygian
   choir: [0, 2, 4, 5, 7, 9, 11], // lydian-ish major
   epic: [0, 2, 4, 5, 7, 9, 10], // mixolydian
+  hope: [0, 2, 4, 7, 9], // major pentatonic: the ending resolves rather than drives
 };
 
 /** Pure: the plan for wave `n`. Deterministic, so the same wave always sounds the same. */
@@ -105,8 +121,16 @@ export class Music {
 
   /** Start the theme for wave `n`. Calling it again for the same wave is a no-op. */
   play(n: number) {
+    this.playPlan(trackPlan(n));
+  }
+
+  /** The ending theme, after the campaign is won. */
+  playEnding() {
+    this.playPlan(endingPlan());
+  }
+
+  private playPlan(plan: TrackPlan) {
     if (!this.ctx) return;
-    const plan = trackPlan(n);
     if (this.plan?.wave === plan.wave && this.timer !== null) return;
     this.plan = plan;
     this.step = 0;

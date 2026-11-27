@@ -433,7 +433,8 @@ export class Game implements Sim {
     this.phase = p;
     if (this.canvas) this.canvas.style.cursor = p === "playing" ? "none" : "default";
     this.music.duck(p !== "playing");
-    if (p === "dead" || p === "won") this.music.stop();
+    if (p === "dead") this.music.stop();
+    else if (p === "won") this.music.playEnding();
     this.cb.onPhase?.(p);
   }
 

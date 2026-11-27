@@ -23,7 +23,8 @@
   - Done: procedural score (src/game/music.ts). Every wave has its own key, mode, tempo and pattern (59 distinct themes across 60 waves); the four seasons set the palette (maria / breach / beast / chapter) and wave 60 has its own finale. Drums and the intensity rise as titans close in. Ducks on pause, stops on death or victory.
   - Done since: Reiss steam emitter.
   - Done since: titan footsteps by kind (beast, Reiss, hammer/Founding, normal), spear throw and pin sounds.
-  - Still to do: listen-test in a browser and tune the levels; a dedicated ending theme.
+  - Done since: a dedicated ending theme (slow D major-pentatonic, no drums) plays on victory; checked in scripts/rules.ts.
+  - Still to do: listen-test in a browser and tune the levels.
 - [~] **Mobile support:** touch controls that are easy to play.
   - Done: on-screen move stick, look drag, BOOST, HOOK L/R (hold keeps the rope), SLASH, SPEAR, RELOAD, GRAB, PAUSE (src/Touch.tsx). Touch tutorial copy, minimap hidden on phones, HUD bars clear of the buttons. Checked in headless Chromium at 844×390 (no console errors) and in scripts/touch.ts.
   - Still to do: check on a real phone; narrow screens (under ~700 px) will still crowd the HUD; sensitivity settings; landscape-only lock.

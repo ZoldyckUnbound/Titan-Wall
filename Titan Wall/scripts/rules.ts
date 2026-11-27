@@ -165,6 +165,13 @@ check(distinct >= 45, `the 60 waves use many different themes (${distinct} disti
 check(trackPlan(1).season === "maria" && trackPlan(10).season === "breach" && trackPlan(20).season === "beast" && trackPlan(40).season === "chapter" && trackPlan(60).season === "finale", "seasons map to waves 1 / 10 / 20 / 40 / 60");
 check(Array.from({ length: 60 }, (_, i) => trackPlan(i + 1).bpm).every((b) => b >= 84 && b <= 150), "tempos stay in the 84–150 BPM range");
 check(trackPlan(0).wave === 1 && trackPlan(999).wave === 60, "track plans clamp out-of-range waves");
+// 9b. ending theme: its own track, never the same as a wave, slower and without drums
+{
+  const { endingPlan } = await import("../src/game/music");
+  const e = endingPlan();
+  const clash = Array.from({ length: 60 }, (_, i) => key(i + 1)).includes(`${e.rootHz}|${e.bpm}|${e.arp.join("")}|${e.bass.join("")}`);
+  check(!clash && e.tone === "hope" && e.bpm <= 84 && e.drumsAt > 1, "the ending theme is its own track: slow, major, no drums");
+}
 // 10. music scheduler runs against a stub AudioContext (the real one needs a browser)
 {
   const made = { osc: 0, buf: 0, gain: 0 };
