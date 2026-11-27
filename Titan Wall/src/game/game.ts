@@ -105,6 +105,9 @@ const _aimO = new V3();
 /** Damage a glancing (sub-clean) nape cut does to plated titans. Plated kinds need a 1.35× clean cut to die. */
 const PLATE_DMG: Partial<Record<SpawnKind, number>> = { armored: 10, hammer: 120, founding: 250 };
 
+/** How long a hook press waits for the hook to be ready (cooldown or stun) before it is dropped. */
+const HOOK_BUFFER = 0.3;
+
 export class Game implements Sim {
   readonly scene = new THREE.Scene();
   readonly camera = new THREE.PerspectiveCamera(72, 1, 0.3, 2500);
@@ -127,6 +130,8 @@ export class Game implements Sim {
   private keys = new Set<string>();
   private mouse = [false, false];
   private pendFire = [0, 0];
+  /** Touch layer state (written by the on-screen pad in Touch.tsx). mx/my: stick, +my is forward. */
+  readonly touch = { mx: 0, my: 0, boost: false, hold: [false, false] as [boolean, boolean], lookX: 0, lookY: 0, active: false };
   private pendSlash = false;
   private pendSwap = false;
   private pendSpear = false;
@@ -325,8 +330,8 @@ export class Game implements Sim {
       this.keys.add(e.code);
       if (e.code === "KeyR") this.pendSwap = true;
       // AOT Revolution layout: Q / E fire the left / right hook (hold to keep the rope), LMB cuts, F throws a spear
-      if (e.code === "KeyQ") this.pendFire[0] = 0.18;
-      if (e.code === "KeyE") this.pendFire[1] = 0.18;
+      if (e.code === "KeyQ") this.pendFire[0] = HOOK_BUFFER;
+      if (e.code === "KeyE") this.pendFire[1] = HOOK_BUFFER;
       if (e.code === "KeyF") this.pendSpear = true;
       if (e.code === "Space") this.pendStruggle = true;
       if (e.code === "KeyP") this.pause();
@@ -341,6 +346,8 @@ export class Game implements Sim {
     });
     on(window, "mousedown", (e) => {
       if (this.phase !== "playing") return;
+      // touch screens fire emulated mouse events after a tap: those are handled by the touch pad
+      if ((e as any).sourceCapabilities?.firesTouchEvents || this.touch.active) return;
       if (e.target !== canvas && e.target !== this.overlay) return;
       if (e.button === 0) {
         this.mouse[0] = true;
@@ -820,6 +827,12 @@ export class Game implements Sim {
     if (k.has("ArrowRight")) this.camYaw -= 2.2 * dt;
     if (k.has("ArrowUp")) this.camPitch = clamp(this.camPitch + 1.6 * dt, -1.3, 1.3);
     if (k.has("ArrowDown")) this.camPitch = clamp(this.camPitch - 1.6 * dt, -1.3, 1.3);
+    const tc = this.touch;
+    if (tc.lookX || tc.lookY) {
+      this.camYaw -= tc.lookX * 0.0028;
+      this.camPitch = clamp(this.camPitch - tc.lookY * 0.0028, -1.3, 1.3);
+      tc.lookX = tc.lookY = 0;
+    }
     if (this.edgePan && !this.lockActive) {
       const dz = 0.28;
       const mx = this.mouseN.x;
@@ -829,16 +842,16 @@ export class Game implements Sim {
     }
     _f.set(Math.sin(this.camYaw), 0, Math.cos(this.camYaw));
     _r.set(-Math.cos(this.camYaw), 0, Math.sin(this.camYaw));
-    const fw = (k.has("KeyW") ? 1 : 0) - (k.has("KeyS") ? 1 : 0);
-    const rt = (k.has("KeyD") ? 1 : 0) - (k.has("KeyA") ? 1 : 0);
+    const fw = clamp((k.has("KeyW") ? 1 : 0) - (k.has("KeyS") ? 1 : 0) + tc.my, -1, 1);
+    const rt = clamp((k.has("KeyD") ? 1 : 0) - (k.has("KeyA") ? 1 : 0) + tc.mx, -1, 1);
     c.move.set(0, 0, 0).addScaledVector(_f, fw).addScaledVector(_r, rt);
     if (c.move.lengthSq() > 1) c.move.normalize();
-    c.boost = k.has("Space");
+    c.boost = k.has("Space") || tc.boost;
     c.reel = k.has("ShiftLeft") || k.has("ShiftRight");
     const cp = Math.cos(this.camPitch);
     c.boostDir.set(Math.sin(this.camYaw) * cp, Math.sin(this.camPitch), Math.cos(this.camYaw) * cp);
-    c.hold[0] = this.keys.has("KeyQ");
-    c.hold[1] = this.keys.has("KeyE");
+    c.hold[0] = this.keys.has("KeyQ") || tc.hold[0];
+    c.hold[1] = this.keys.has("KeyE") || tc.hold[1];
     for (let i = 0; i < 2; i++) {
       if (this.pendFire[i] > 0) {
         this.pendFire[i] -= dt;
@@ -855,6 +868,17 @@ export class Game implements Sim {
     c.swap = this.pendSwap;
     c.struggle = this.pendStruggle && !!this.player.grabbedBy;
     this.pendSlash = this.pendSwap = this.pendStruggle = false;
+  }
+
+  /** One-shot touch actions, queued like the matching keys. */
+  touchAction(a: "hookL" | "hookR" | "slash" | "spear" | "reload" | "struggle") {
+    if (this.phase !== "playing") return;
+    if (a === "hookL") this.pendFire[0] = HOOK_BUFFER;
+    else if (a === "hookR") this.pendFire[1] = HOOK_BUFFER;
+    else if (a === "slash") this.pendSlash = true;
+    else if (a === "spear") this.pendSpear = true;
+    else if (a === "reload") this.pendSwap = true;
+    else if (a === "struggle") this.pendStruggle = true;
   }
 
   private updateAim() {

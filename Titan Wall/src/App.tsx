@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Ending } from "./Ending";
+import { TouchPad, isTouchDevice } from "./Touch";
 import { Game } from "./game/game";
 import type { BarkMsg, Phase, Snapshot, ToastMsg } from "./game/game";
 import { loadAssets } from "./game/assets";
@@ -78,18 +79,20 @@ const markTutorialDone = () => {
   }
 };
 
-const TUTORIAL: { title: string; body: string }[] = [
-  { title: "Move and look", body: "W A S D runs along the ground. Move the mouse to look around. Arrow keys work too." },
-  { title: "Grapple", body: "Press Q (left) or E (right) to fire a hook at a rooftop, wall or titan. Hold it to stay attached. The rope pulls you toward the anchor. Hooks only catch solid things, not open ground." },
-  { title: "Boost", body: "Hold SPACE to fire your gas. It pushes you up and forward, even when you look down. Boosting burns gas; swinging and reeling are free." },
-  { title: "Reel in", body: "Hold SHIFT to shorten the rope and swing in tighter. It costs no gas." },
+/** Tutorial copy. `touch` replaces `body` on phones and tablets, where the pad labels are the controls. */
+const TUTORIAL: { title: string; body: string; touch?: string }[] = [
+  { title: "Move and look", body: "W A S D runs along the ground. Move the mouse to look around. Arrow keys work too.", touch: "Drag the left stick to run. Drag anywhere on the right side of the screen to look around." },
+  { title: "Grapple", body: "Press Q (left) or E (right) to fire a hook at a rooftop, wall or titan. Hold it to stay attached. The rope pulls you toward the anchor. Hooks only catch solid things, not open ground.", touch: "Tap HOOK L or HOOK R to fire at the centre of the screen. Hold one to stay attached; the rope pulls you toward the anchor. Hooks only catch solid things." },
+  { title: "Boost", body: "Hold SPACE to fire your gas. It pushes you up and forward, even when you look down. Boosting burns gas; swinging and reeling are free.", touch: "Hold BOOST to fire your gas. It pushes you up and forward, even when you look down. Boosting burns gas." },
+  { title: "Reel in", body: "Hold SHIFT to shorten the rope and swing in tighter. It costs no gas.", touch: "Keep a hook held and the rope tightens as you swing. Reeling costs no gas." },
   { title: "Landing", body: "Touch down gently or boost into the landing. A hard, flat crash into a wall or street hurts." },
-  { title: "Cut the nape", body: "Reach a titan's glowing red nape at 12 m/s or faster and click LMB to slash. Blades dull as you cut; R swaps in a fresh set." },
+  { title: "Cut the nape", body: "Reach a titan's glowing red nape at 12 m/s or faster and click LMB to slash. Blades dull as you cut; R swaps in a fresh set.", touch: "Reach a titan's glowing red nape at 12 m/s or faster and tap SLASH. Blades dull as you cut; RELOAD swaps in a fresh set." },
   { title: "Depots and squad", body: "Depots restock gas and blades and heal you. A depot goes offline when a titan is too close. Squad mates have one life each, so keep them alive." },
 ];
 
-function Tutorial({ step, onNext, onSkip }: { step: number; onNext: () => void; onSkip: () => void }) {
+function Tutorial({ step, onNext, onSkip, touch }: { step: number; onNext: () => void; onSkip: () => void; touch: boolean }) {
   const t = TUTORIAL[step];
+  const body = touch && t.touch ? t.touch : t.body;
   return (
     <div className="absolute inset-x-0 bottom-6 z-30 flex justify-center px-4">
       <div className="w-[32rem] max-w-full rounded-xl border border-amber-200/30 bg-black/85 p-5 shadow-2xl">
@@ -98,7 +101,7 @@ function Tutorial({ step, onNext, onSkip }: { step: number; onNext: () => void; 
           <button onClick={onSkip} className="text-xs text-slate-400 hover:text-white">Skip tutorial</button>
         </div>
         <div className="mt-2 font-serif text-2xl font-bold text-white">{t.title}</div>
-        <p className="mt-1.5 text-sm leading-relaxed text-slate-200">{t.body}</p>
+        <p className="mt-1.5 text-sm leading-relaxed text-slate-200">{body}</p>
         <div className="mt-4 flex justify-end">
           <button onClick={onNext} className="rounded bg-emerald-500 px-6 py-2 text-sm font-extrabold tracking-widest text-black hover:bg-emerald-400">
             {step + 1 < TUTORIAL.length ? "NEXT" : "DEPLOY"}
@@ -179,7 +182,9 @@ function Menu({ onStart, onContinue, savedWave, loading, note }: { onStart: () =
               CONTINUE FROM WAVE {savedWave}
             </button>
           )}
-          <div className="text-[11px] text-slate-400">Desktop · mouse + keyboard · click to capture the mouse (Esc to pause)</div>
+          <div className="text-[11px] text-slate-400">
+            {isTouchDevice() ? "Phone or tablet · on-screen controls · tap PAUSE in the corner any time" : "Desktop · mouse + keyboard · click to capture the mouse (Esc to pause)"}
+          </div>
           {note && <div className="text-[11px] text-amber-200/70">{note}</div>}
         </div>
       </div>
@@ -196,6 +201,7 @@ export default function App() {
     gameRef.current?.setMinimap(el);
   }, []);
   const gameRef = useRef<Game | null>(null);
+  const [touch] = useState(() => isTouchDevice());
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [phase, setPhase] = useState<Phase>("menu");
   const [barks, setBarks] = useState<TimedBark[]>([]);
@@ -465,17 +471,22 @@ export default function App() {
                   <b className={s.hooks[1] === "attached" ? "text-emerald-300" : ""}>R {s.hooks[1] === "idle" ? "—" : s.hooks[1]}</b>
                 </span>
                 {s.resupplying && <span className="animate-pulse font-bold text-cyan-300">RESUPPLYING…</span>}
-                <span>Q/E hooks · LMB slash · SPACE boost · SHIFT reel · R blades · F spear</span>
+                <span>{touch ? "HOOK L/R · SLASH · BOOST · SPEAR · RELOAD" : "Q/E hooks · LMB slash · SPACE boost · SHIFT reel · R blades · F spear"}</span>
               </div>
             </div>
           </div>
 
-          {s.lock === "edge" && phase === "playing" && (
+          {s.lock === "edge" && phase === "playing" && !touch && (
             <div className="absolute bottom-2 right-3 max-w-xs rounded bg-black/60 px-2 py-1 text-right text-[10px] text-amber-200">
               Pointer lock unavailable — push the mouse toward the screen edges to turn (arrow keys also work).
             </div>
           )}
         </div>
+      )}
+
+      {/* on-screen controls for phones and tablets */}
+      {s && phase === "playing" && touch && gameRef.current && (
+        <TouchPad game={gameRef.current} onPause={() => gameRef.current?.pause()} />
       )}
 
       {/* pause */}
@@ -549,6 +560,7 @@ export default function App() {
           step={tutStep}
           onNext={() => (tutStep + 1 < TUTORIAL.length ? setTutStep(tutStep + 1) : finishTutorial())}
           onSkip={finishTutorial}
+          touch={touch}
         />
       )}
       {phase === "menu" && <Menu onStart={() => deploy()} onContinue={(w) => deploy(w)} savedWave={savedWave} loading={loading} note={note} />}

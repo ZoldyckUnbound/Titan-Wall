@@ -16,4 +16,7 @@ export default defineConfig({
       "@": path.resolve(__dirname, "src"),
     },
   },
+  // the live preview is served from a sandbox host; allow it for both dev and preview servers
+  server: { host: "0.0.0.0", allowedHosts: true },
+  preview: { host: "0.0.0.0", allowedHosts: true },
 });
