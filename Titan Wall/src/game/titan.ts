@@ -35,6 +35,18 @@ const LIMB_JOINTS: { joint: "elbowL" | "elbowR" | "kneeL" | "kneeR"; kind: HitSp
 ];
 
 // unit-height-space body hit volumes (nape handled separately)
+/** Per-kind overrides for the specialist titans. Normals and abnormals keep the height-based formulas. */
+const KIND_TUNE: Partial<Record<SpawnKind, { walk: number; run: number; turn: number; windup: number; recover: number; reach: number; hitR: number }>> = {
+  // quadruped-fast: closes ground quickly, lunges often (see leapCd)
+  beast: { walk: 2.6, run: 9.5, turn: 3.4, windup: 0.4, recover: 0.9, reach: 1.2, hitR: 0.5 },
+  // crawling and steaming: slow to turn, a long telegraphed swipe
+  reiss: { walk: 1.6, run: 5.0, turn: 1.8, windup: 0.9, recover: 1.4, reach: 2.0, hitR: 1.0 },
+  // war hammer: the slowest, with a wide, late-arriving swing
+  hammer: { walk: 1.5, run: 4.2, turn: 1.5, windup: 1.3, recover: 1.8, reach: 3.0, hitR: 3.0 },
+  // the Founding Titan: patient, huge reach, the longest windup in the game
+  founding: { walk: 1.3, run: 3.6, turn: 1.1, windup: 1.6, recover: 1.2, reach: 4.0, hitR: 4.5 },
+};
+
 const BODY_SPHERES: { kind: HitSphere["kind"]; y: number; z: number; r: number }[] = [
   { kind: "head", y: 0.9, z: 0.01, r: 0.085 },
   { kind: "torso", y: 0.69, z: 0, r: 0.16 },
@@ -90,6 +102,10 @@ export class Titan {
   private attackKind: "grab" | "swat" = "swat";
   private windDur = 0.6;
   private recDur = 1;
+  /** Extra strike radius for hammer and Founding swings (0 for other kinds). */
+  private hitR = 0;
+  private windBase = 0.62;
+  private recBase = 1.25;
   private eatT = 0;
   private eatDur = 6.5;
   private stunT = 0;
@@ -120,8 +136,18 @@ export class Titan {
     this.runSpeed = clamp((abnormal ? 11.2 - height * 0.12 : 6.8 - height * 0.15), abnormal ? 6 : 2.8, abnormal ? 11.2 : 6.8);
     this.reach = 0.5 * height + 1.6;
     this.turnRate = abnormal ? 4.2 : 2.3;
+    const tune = KIND_TUNE[kind];
+    if (tune) {
+      this.walkSpeed = tune.walk;
+      this.runSpeed = tune.run;
+      this.turnRate = tune.turn;
+      this.reach = 0.5 * height + tune.reach;
+      this.windBase = tune.windup;
+      this.recBase = tune.recover;
+      this.hitR = tune.hitR;
+    }
     this.yaw = rand(0, Math.PI * 2);
-    this.parts = buildTitan(height, abnormal, this.napeR);
+    this.parts = buildTitan(height, abnormal, this.napeR, kind);
     this.model = this.parts.root;
     this.model.position.copy(pos);
     for (let i = 0; i < BODY_SPHERES.length + 1; i++)
@@ -333,6 +359,15 @@ export class Titan {
     }
     this.st += dt;
     this.atkCd = Math.max(0, this.atkCd - dt);
+    if (this.kind === "reiss") {
+      // Reiss vents heat: a steady plume from the shoulders, thicker when it runs
+      this.steamT -= dt;
+      if (this.steamT <= 0) {
+        this.steamT = this.moveSpeed > 2 ? 0.14 : 0.35;
+        _a.set(this.pos.x, this.pos.y + this.height * 0.82, this.pos.z);
+        sim.fx.steam(_a, 2, this.height * 0.35, 4);
+      }
+    }
     this.leapCd = Math.max(0, this.leapCd - dt);
     this.senseT -= dt;
     if (this.senseT <= 0 && this.state !== "eating") this.sense(sim);
@@ -539,8 +574,8 @@ export class Titan {
     this.attackKind = t.pos.y < this.height * 0.7 ? (Math.random() < 0.62 ? "grab" : "swat") : Math.random() < 0.25 ? "grab" : "swat";
     this.state = "windup";
     this.st = 0;
-    this.windDur = this.abnormal ? 0.36 : 0.62;
-    this.recDur = this.abnormal ? 0.8 : 1.25;
+    this.windDur = this.abnormal ? 0.36 : this.windBase;
+    this.recDur = this.abnormal ? 0.8 : this.recBase;
     this.atkCd = this.windDur + this.recDur + 0.3;
   }
 
@@ -560,7 +595,7 @@ export class Titan {
     this.vy -= 32 * dt;
     // grab/swat check in flight
     const hp = this.handPoint(_b);
-    const R = 0.32 * this.height + 2.2;
+    const R = 0.32 * this.height + 2.2 + this.hitR;
     for (const s of sim.scouts) {
       if (!s.alive || s.grabbedBy || s.invuln > 0) continue;
       if (s.pos.distanceTo(hp) < R) {
@@ -587,7 +622,7 @@ export class Titan {
 
   private strike(sim: Sim) {
     const hp = this.handPoint(_b);
-    const R = 0.3 * this.height + 2.0;
+    const R = 0.3 * this.height + 2.0 + this.hitR;
     let grabbedOne = false;
     for (const s of sim.scouts) {
       if (!s.alive || s.grabbedBy) continue;

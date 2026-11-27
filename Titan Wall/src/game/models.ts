@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import type { SpawnKind } from "./waves";
 import { loaded, instantiateByHeight } from "./assets";
 
 const geoCache = new Map<string, THREE.BufferGeometry>();
@@ -184,15 +185,29 @@ const HAIRS = [0x3a2c20, 0x1f1a17, 0x6b4a2a, 0x8a7a55, 0x2c2a2a];
 export const NAPE_LOCAL = new THREE.Vector3(0, 0.835, -0.058);
 
 /** Titan in unit-height space (feet at y=0, faces +Z); the root is scaled to the titan's height. */
-export function buildTitan(height: number, abnormal: boolean, napeR: number): TitanParts {
+export function buildTitan(
+  height: number,
+  abnormal: boolean,
+  napeR: number,
+  kind: SpawnKind = abnormal ? "abnormal" : "normal"
+): TitanParts {
   const root = new THREE.Group();
   const body = new THREE.Group();
   root.add(body);
   root.scale.setScalar(height);
 
-  const skinCol = abnormal ? 0xb99c8b : SKINS[Math.floor(Math.random() * SKINS.length)];
+  // each specialist reads at a glance: beast = tawny and long-armed, Reiss = bone and faceless,
+  // hammer = broad and armed, Founding = pale gold with a halo
+  const skinCol =
+    kind === "beast" ? 0x7d5b47 :
+    kind === "reiss" ? 0xd9d0bd :
+    kind === "founding" ? 0xf1e4c8 :
+    abnormal ? 0xb99c8b : SKINS[Math.floor(Math.random() * SKINS.length)];
   const skin = std(skinCol, 0.75);
-  const hairM = std(abnormal ? 0x151313 : HAIRS[Math.floor(Math.random() * HAIRS.length)], 0.95);
+  const hairM = std(
+    kind === "founding" ? 0xe8dcc0 : abnormal || kind === "beast" ? 0x151313 : HAIRS[Math.floor(Math.random() * HAIRS.length)],
+    0.95
+  );
   const dark = std(0x120d0d, 0.6);
   const white = std(0xf1ece0, 0.5);
   const mouthM = std(0x3a0f12, 0.6);
@@ -219,6 +234,11 @@ export function buildTitan(height: number, abnormal: boolean, napeR: number): Ti
 
   mesh(box(0.19, 0.1, 0.11), skin, 0, 0.5, 0, body);
   mesh(box(0.27, 0.28, 0.14), skin, 0, 0.69, 0, body);
+  if (kind === "hammer") mesh(box(0.36, 0.26, 0.18), skin, 0, 0.72, 0, body); // broad shoulders
+  if (kind === "reiss") {
+    // exposed ribs over a hollow chest
+    for (const ry of [0.6, 0.66, 0.72, 0.78]) mesh(box(0.22, 0.012, 0.02), white, 0, ry, 0.085, body);
+  }
   const sh = mesh(capsule(0.045, 0.27), skin, 0, 0.8, 0, body);
   sh.rotation.z = Math.PI / 2;
   mesh(cyl(0.035, 0.042, 0.065, 8), skin, 0, 0.845, 0, body);
@@ -244,6 +264,22 @@ export function buildTitan(height: number, abnormal: boolean, napeR: number): Ti
   teeth.scale.x = abnormal ? 1.7 : 1;
   const hair = mesh(new THREE.SphereGeometry(0.083, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), hairM, 0, 0.008, -0.012, head);
   hair.rotation.x = -0.45;
+  if (kind === "founding") hair.scale.set(1.25, 1.6, 1.25); // long flowing hair
+  if (kind === "beast") mesh(box(0.05, 0.04, 0.07), skin, 0, -0.02, 0.078, head); // muzzle
+  if (kind === "reiss") {
+    // faceless: only the bare skull, no eyes, mouth or hair
+    for (const c of head.children) if (c !== skull) c.visible = false;
+  }
+  if (kind === "founding") {
+    // a gold halo above the head
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(0.15, 0.008, 6, 28),
+      new THREE.MeshBasicMaterial({ color: 0xffe59a })
+    );
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(0, 1.02, 0);
+    body.add(ring);
+  }
 
   // arms
   const mkArm = (sx: number): [THREE.Group, THREE.Group] => {
@@ -251,6 +287,7 @@ export function buildTitan(height: number, abnormal: boolean, napeR: number): Ti
     s.position.set(sx * 0.17, 0.79, 0);
     body.add(s);
     if (abnormal) s.scale.set(1, 1.25, 1);
+    if (kind === "beast") s.scale.set(1.1, 1.7, 1.1); // long, hanging arms
     mesh(capsule(0.032, 0.1), skin, 0, -0.09, 0, s);
     const e = new THREE.Group();
     e.position.y = -0.18;
@@ -261,6 +298,11 @@ export function buildTitan(height: number, abnormal: boolean, napeR: number): Ti
   };
   const [shoulderL, elbowL] = mkArm(-1);
   const [shoulderR, elbowR] = mkArm(1);
+  if (kind === "hammer") {
+    // war hammer carried in the right hand: wooden haft and an iron head
+    mesh(cyl(0.018, 0.018, 0.5, 6), std(0x5a3b22, 0.8), 0, -0.3, 0.02, elbowR);
+    mesh(box(0.2, 0.14, 0.1), std(0x3b3a3d, 0.5, 0.6), 0, -0.56, 0.02, elbowR);
+  }
 
   // nape weak-point: glowing marker + translucent hit-volume halo
   const marker = new THREE.Mesh(

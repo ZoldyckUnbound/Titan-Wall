@@ -11,7 +11,7 @@ import type { BotKind } from "./bots";
 import type { Sim, RayHit, BarkKey } from "./types";
 import { waveSpec, FINAL_WAVE } from "./waves";
 import { Music } from "./music";
-import type { SpawnSpec } from "./waves";
+import type { SpawnSpec, SpawnKind } from "./waves";
 import { MARIA_R, ROSE_R, wallRingAt } from "./lore";
 
 /** A depot is out of order while a titan is this close (game units). */
@@ -101,6 +101,9 @@ const _w = new V3();
 const _f = new V3();
 const _r = new V3();
 const _aimO = new V3();
+
+/** Damage a glancing (sub-clean) nape cut does to plated titans. Plated kinds need a 1.35× clean cut to die. */
+const PLATE_DMG: Partial<Record<SpawnKind, number>> = { armored: 10, hammer: 120, founding: 250 };
 
 export class Game implements Sim {
   readonly scene = new THREE.Scene();
@@ -737,10 +740,12 @@ export class Game implements Sim {
       if (front > t.napeR * 1.2 + 1.5) continue; // face side: nape not reachable
       s.slashHit = true;
       const rel = _v.copy(s.vel).sub(t.vel).length();
-      // armored titans wear plate over the nape: only a hard, clean cut gets through
-      if (t.kind === "armored" && rel < s.killSpeed * 1.35) {
+      // armored titans and the war-hammer / Founding bosses wear plate over the nape:
+      // only a hard, clean cut gets through; a glancing cut chips the plate for PLATE_DMG
+      const plate = PLATE_DMG[t.kind];
+      if (plate && rel < s.killSpeed * 1.35) {
         s.bladeDur = Math.max(0, s.bladeDur - 12);
-        t.hp = Math.max(1, t.hp - 10 * s.dmgMult);
+        t.hp = Math.max(1, t.hp - plate * s.dmgMult);
         this.fx.sparks(t.nape, 10, [0.85, 0.85, 0.9]);
         if (s.isPlayer) this.toast(`Armour plate! Need ${Math.ceil(s.killSpeed * 1.35)}+ m/s to cut through`, "bad");
         return;
