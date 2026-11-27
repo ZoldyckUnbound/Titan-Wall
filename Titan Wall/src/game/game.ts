@@ -1005,6 +1005,7 @@ export class Game implements Sim {
     for (let i = this.delayed.length - 1; i >= 0; i--) {
       if (this.time >= this.delayed[i].t) this.delayed.splice(i, 1)[0].fn();
     }
+    this.world.setFocus(this.player.pos.x, this.player.pos.z);
     this.updateAim();
     this.buildPlayerCtrl(dtReal);
 

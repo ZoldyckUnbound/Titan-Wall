@@ -9,6 +9,8 @@ import type { BuildingSpec } from "./buildings";
 import { WALL_H, WALL_T, SINA_R, ROSE_R, MARIA_R, MAP_R, OCEAN_R, PLAYER_START, SHIG_GATE, SHIG_GATE_HALF, DEPOTS, DISTRICTS, FORESTS } from "./lore";
 import type { RayHit } from "./types";
 
+const _yAxis = new THREE.Vector3(0, 1, 0);
+
 // ----------------------------------------------------------------------------- collision boxes
 /**
  * Oriented box. `cx,cz` is the footprint centre, `hx` the half-width along the box's local X
@@ -325,6 +327,7 @@ export class World {
     this.buildDepots();
     this.chunks = new BuildingChunks(this.layout.buildings, 160, HALF);
     for (const s of this.layout.buildings) this.addBuildingBox(s);
+    this.buildWilderness();
     this.buildProps(); // after the building boxes, so props keep clear of every house
     this.group.add(this.chunks.group);
     this.chunks.buildAll();
@@ -824,6 +827,200 @@ export class World {
       this.fountains.push({ x: f.x, z: f.z, r: f.r });
       const b = makeBox("fountain", f.x, f.z, f.r * 0.92, f.r * 0.92, 0, 1.3);
       this.insert(b);
+    }
+  }
+
+  private grassGeo: THREE.BufferGeometry | null = null;
+  private grassMat: THREE.Material | null = null;
+  private grassIM: THREE.InstancedMesh | null = null;
+  private grassAt: { x: number; z: number } | null = null;
+
+  /**
+   * Keep a dense ring of grass around (x, z). It is regenerated after the focus moves 120 m, and the
+   * positions come from a fixed hash, so the same ground is covered every time.
+   */
+  setFocus(x: number, z: number) {
+    if (!this.grassGeo || !this.grassMat) return;
+    if (this.grassAt && Math.hypot(x - this.grassAt.x, z - this.grassAt.z) < 120) return;
+    this.grassAt = { x, z };
+    const R = 700;
+    const STEP = 8;
+    const cap = 40000;
+    if (!this.grassIM) {
+      this.grassIM = new THREE.InstancedMesh(this.grassGeo, this.grassMat, cap);
+      this.grassIM.castShadow = false;
+      // the bounding sphere of an instanced mesh is fixed at creation, so culling would drop the grass; keep it on
+      this.grassIM.frustumCulled = false;
+      this.grassIM.receiveShadow = true;
+      this.grassIM.count = 0;
+      this.group.add(this.grassIM);
+    }
+    const im = this.grassIM;
+    const hash = (i: number, j: number, k: number) => {
+      let h = (i * 374761393 + j * 668265263 + k * 2147483647) | 0;
+      h = Math.imul(h ^ (h >>> 13), 1274126177);
+      return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+    };
+    const cols = [0x6f9446, 0x7fa653, 0x5f8a3c, 0x9aab5e, 0x8c9a4a];
+    const col = new THREE.Color();
+    const q = new THREE.Quaternion();
+    const sc = new THREE.Vector3();
+    const pos = new THREE.Vector3();
+    const m = new THREE.Matrix4();
+    let n = 0;
+    const i0 = Math.floor((x - R) / STEP);
+    const i1 = Math.floor((x + R) / STEP);
+    const j0 = Math.floor((z - R) / STEP);
+    const j1 = Math.floor((z + R) / STEP);
+    for (let j = j0; j <= j1 && n < cap; j++) {
+      for (let i = i0; i <= i1 && n < cap; i++) {
+        const gx = i * STEP + hash(i, j, 1) * STEP;
+        const gz = j * STEP + hash(i, j, 2) * STEP;
+        if (Math.hypot(gx - x, gz - z) > R) continue;
+        if (Math.hypot(gx, gz) > MAP_R - 60) continue;
+        if (DISTRICTS.some((d) => (gx - d.c.x) ** 2 + (gz - d.c.z) ** 2 < (d.r + 40) ** 2)) continue;
+        if ([SINA_R, ROSE_R, MARIA_R].some((w) => Math.abs(Math.hypot(gx, gz) - w) < 40)) continue;
+        if (hash(i, j, 3) < 0.18) continue; // gaps: bare earth, paths, animal tracks
+        const yaw = hash(i, j, 4) * 6.283;
+        const s = 0.7 + hash(i, j, 5) * 0.7;
+        q.setFromAxisAngle(_yAxis, yaw);
+        // small tufts: they should read as grass, not as tents, when they are close
+        sc.set(s * 0.55, s * (0.45 + hash(i, j, 6) * 0.5), s * 0.55);
+        pos.set(gx, 0, gz);
+        m.compose(pos, q, sc);
+        im.setMatrixAt(n, m);
+        im.setColorAt(n, col.setHex(cols[Math.floor(hash(i, j, 7) * cols.length)]));
+        n++;
+      }
+    }
+    im.count = n;
+    im.instanceMatrix.needsUpdate = true;
+    if (im.instanceColor) im.instanceColor.needsUpdate = true;
+  }
+
+  /**
+   * Wilderness cover: grass, bushes, hedgerow trees, rock outcrops and dirt roads, scattered over the
+   * fields and hills between the districts. Instanced and decoration only (no collision, no nav).
+   * Districts keep their own dressing and are skipped, so the open land is never an empty plain.
+   */
+  private buildWilderness() {
+    const rng = new RNG(909);
+    const CELL = 110;
+    const grassGeo = new THREE.ConeGeometry(0.55, 1.1, 4);
+    grassGeo.translate(0, 0.55, 0);
+    const bushGeo = new THREE.IcosahedronGeometry(1.4, 0);
+    bushGeo.scale(1.2, 0.8, 1.2);
+    bushGeo.translate(0, 0.8, 0);
+    const rockGeo = new THREE.DodecahedronGeometry(1.6, 0);
+    rockGeo.translate(0, 0.9, 0);
+    const trunkGeo = new THREE.CylinderGeometry(0.35, 0.5, 4.5, 6);
+    trunkGeo.translate(0, 2.25, 0);
+    const canopyGeo = new THREE.IcosahedronGeometry(3.2, 0);
+    canopyGeo.translate(0, 6.2, 0);
+    const grassMat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: false, roughness: 1, flatShading: true });
+    const bushMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, flatShading: true });
+    const rockMat = new THREE.MeshStandardMaterial({ color: 0x8c877b, roughness: 0.95, flatShading: true });
+    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5a4330, roughness: 1 });
+    const canopyMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, flatShading: true });
+    const bushCols = [0x3f6b2e, 0x4d7a36, 0x6b8a3a, 0x34582a];
+    const canopyCols = [0x2f5a2a, 0x3c6b32, 0x4f7a3a, 0x5e6e2f];
+
+    const bushes: { m: THREE.Matrix4; c: number }[] = [];
+    const trees: { m: THREE.Matrix4; c: number }[] = [];
+    const rocks: THREE.Matrix4[] = [];
+    const q = new THREE.Quaternion();
+    const sc = new THREE.Vector3();
+    const pos = new THREE.Vector3();
+    const place = (x: number, y: number, z: number, yaw: number, s: number, sy = s) => {
+      q.setFromAxisAngle(_yAxis, yaw);
+      sc.set(s, sy, s);
+      pos.set(x, y, z);
+      return new THREE.Matrix4().compose(pos, q, sc);
+    };
+    const inDistrict = (x: number, z: number) => DISTRICTS.some((d) => (x - d.c.x) ** 2 + (z - d.c.z) ** 2 < (d.r + 70) ** 2);
+    const nearWall = (x: number, z: number) => {
+      const r = Math.hypot(x, z);
+      return [SINA_R, ROSE_R, MARIA_R].some((w) => Math.abs(r - w) < 60);
+    };
+    const edge = MAP_R - 60;
+    for (let gz = -MAP_R; gz <= MAP_R; gz += CELL) {
+      for (let gx = -MAP_R; gx <= MAP_R; gx += CELL) {
+        const x = gx + rng.range(-CELL * 0.4, CELL * 0.4);
+        const z = gz + rng.range(-CELL * 0.4, CELL * 0.4);
+        if (Math.hypot(x, z) > edge) continue;
+        if (inDistrict(x, z) || nearWall(x, z)) continue;
+        const r = rng.next();
+        if (r < 0.34) {
+          const n = 1 + Math.floor(rng.next() * 3);
+          for (let i = 0; i < n; i++) {
+            const c = bushCols[Math.floor(rng.next() * bushCols.length)];
+            bushes.push({ m: place(x + rng.range(-20, 20), 0, z + rng.range(-20, 20), rng.next() * 6.28, rng.range(0.9, 1.9)), c });
+          }
+        } else if (r < 0.46) {
+          const c = canopyCols[Math.floor(rng.next() * canopyCols.length)];
+          trees.push({ m: place(x + rng.range(-25, 25), 0, z + rng.range(-25, 25), rng.next() * 6.28, rng.range(0.8, 1.5)), c });
+        } else if (r < 0.5) {
+          rocks.push(place(x + rng.range(-30, 30), 0, z + rng.range(-30, 30), rng.next() * 6.28, rng.range(0.8, 2.2), rng.range(0.6, 1.4)));
+        }
+      }
+    }
+
+    const fill = (geo: THREE.BufferGeometry, mat: THREE.Material, list: THREE.Matrix4[], shadow: boolean) => {
+      if (!list.length) return;
+      const im = new THREE.InstancedMesh(geo, mat, list.length);
+      list.forEach((mm, i) => im.setMatrixAt(i, mm));
+      im.instanceMatrix.needsUpdate = true;
+      im.castShadow = shadow;
+      im.receiveShadow = true;
+      this.group.add(im);
+    };
+    // grass is dense near the player (see setFocus), not spread thinly over the whole map
+    this.grassGeo = grassGeo;
+    this.grassMat = grassMat;
+    fill(rockGeo, rockMat, rocks, true);
+    // coloured instances: set the colour per instance
+    const coloured = (geo: THREE.BufferGeometry, mat: THREE.Material, list: { m: THREE.Matrix4; c: number }[], shadow: boolean) => {
+      if (!list.length) return;
+      const im = new THREE.InstancedMesh(geo, mat, list.length);
+      const col = new THREE.Color();
+      list.forEach((it, i) => {
+        im.setMatrixAt(i, it.m);
+        im.setColorAt(i, col.setHex(it.c));
+      });
+      im.instanceMatrix.needsUpdate = true;
+      if (im.instanceColor) im.instanceColor.needsUpdate = true;
+      im.castShadow = shadow;
+      im.receiveShadow = true;
+      this.group.add(im);
+    };
+    coloured(bushGeo, bushMat, bushes, false);
+    coloured(canopyGeo, canopyMat, trees, true);
+    fill(trunkGeo, trunkMat, trees.map((t) => t.m), true);
+
+    // dirt roads: a chain between each district and its nearest neighbours
+    const roadMat = new THREE.MeshStandardMaterial({ color: 0x8a7552, roughness: 1 });
+    const roads: THREE.Matrix4[] = [];
+    for (let i = 0; i < DISTRICTS.length; i++) {
+      const a = DISTRICTS[i];
+      const near = DISTRICTS.filter((b) => b !== a && Math.hypot(b.c.x - a.c.x, b.c.z - a.c.z) < 2600)
+        .sort((p1, p2) => Math.hypot(p1.c.x - a.c.x, p1.c.z - a.c.z) - Math.hypot(p2.c.x - a.c.x, p2.c.z - a.c.z))
+        .slice(0, 2);
+      for (const b of near) {
+        const dx = b.c.x - a.c.x;
+        const dz = b.c.z - a.c.z;
+        const len = Math.hypot(dx, dz);
+        const yaw = Math.atan2(dx, dz);
+        const steps = Math.floor(len / 40);
+        for (let k = 0; k <= steps; k++) {
+          const t = k / steps;
+          roads.push(place(a.c.x + dx * t, 0.05, a.c.z + dz * t, yaw, 1, 1).multiply(new THREE.Matrix4().makeScale(7, 1, 40)));
+        }
+      }
+    }
+    if (roads.length) {
+      const roadGeo = new THREE.PlaneGeometry(1, 1);
+      roadGeo.rotateX(-Math.PI / 2);
+      fill(roadGeo, roadMat, roads, false);
     }
   }
 
