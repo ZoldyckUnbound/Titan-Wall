@@ -13,7 +13,8 @@
   - Done: hooks on Q/E (hold keeps the rope), LMB slash, F thunder spear (moved from E), R reload, Space boost, Shift reel. Controls, tutorial and HUD text updated to match.
   - Verified in scripts/aot.ts: A/D swings while hooked, a hooked swing burns no gas, boost lifts while looking down, and depots restock spare blades (the reload stations).
   - Perks and families (decided: full scope, no titan shifting). Three families (House Ackerman, Arlert, Braun) with three perks each, unlocked by lifetime waves cleared (10 / 25 / 45), with a loadout of up to three picked on the menu. Saved in localStorage (titanwall.progress.v1). Checked in scripts/perks.ts and in headless Chromium.
-  - Still to do: tune the unlock thresholds and perk strength by playtest; a hooked-release momentum check on landing.
+  - Still to do: tune the unlock thresholds and perk strength by playtest.
+  - Verified in scripts/aot.ts: letting go of a hook mid-air keeps the speed and burns no gas.
   - Decided against: titan shifting.
 - [~] **Bosses after wave 60's founding titan:** multiple bosses (war hammer titan and others) that appear late, with the founding titan on wave 60.
   - Done: wave 60 spawns the Founding Titan (1500 HP, 60 units) with two war-hammer titans, two beasts and Reiss. Hammer and Founding have their own silhouettes (hammer prop, halo, long hair), tuned speed and windup, wider swings, and armour plate (a clean 1.35× cut kills). scripts/bosses.ts checks they can be killed.

@@ -96,5 +96,20 @@ function attach(g: Game, at: [number, number, number], anchor: [number, number, 
   check(true, "footsteps for every titan kind run without audio (no throw)");
 }
 
+// 6. releasing a hook in flight keeps your momentum and burns no gas
+{
+  const g = fresh();
+  attach(g, [0, 80, 0], [0, 140, 0]);
+  g.player.vel.set(0, 0, 14); // swinging forward
+  for (let i = 0; i < 20; i++) { g.touch.hold[0] = true; g.update(dt); }
+  const before = g.player.vel.clone();
+  const gas0 = g.player.gas;
+  g.touch.hold[0] = false; // let go mid-air
+  g.update(dt);
+  const kept = g.player.vel.length() / Math.max(0.01, before.length());
+  check(kept > 0.8, `letting go keeps momentum (${(kept * 100).toFixed(0)}% of speed kept)`);
+  check(g.player.gas >= gas0 - 0.01, "letting go burns no gas");
+}
+
 console.log(fails === 0 ? "ALL PASSED" : `${fails} FAILED`);
 if (fails) process.exitCode = 1;
