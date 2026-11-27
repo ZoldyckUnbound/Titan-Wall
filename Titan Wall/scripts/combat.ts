@@ -1,11 +1,13 @@
 import { Game } from "../src/game/game";
 const msgs: string[] = [];
+const OPEN_X = Number(process.env.OPEN_X ?? 9000), OPEN_Z = Number(process.env.OPEN_Z ?? 0);
 const g = new Game({ onToast: (t) => msgs.push(t.text) });
 g.start();
 const a = g as any;
 const p = g.player;
 const T = g.titans[0];
-T.pos.set(0, 0, 0); T.yaw = 0; // faces +Z, nape is behind (-Z)
+// Open ground well clear of any building (the map is now lore-scaled; the origin is the Mitras palace).
+T.pos.set(OPEN_X, 0, OPEN_Z); T.yaw = 0; // faces +Z, nape is behind (-Z)
 g.titans.splice(1);
 (T as any).state = "recover"; (T as any).recDur = 99; // keep it still
 for (const b of g.brains) { b.scout.alive = false; b.scout.model.visible = false; }
