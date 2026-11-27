@@ -595,9 +595,9 @@ export class Titan {
     this.pos.z += this.vel.z * dt;
     const r = this.radius;
     for (const b of sim.world.boxes) {
-      if (this.pos.x < b.min.x - r || this.pos.x > b.max.x + r || this.pos.z < b.min.z - r || this.pos.z > b.max.z + r) continue;
-      const qx = clamp(this.pos.x, b.min.x, b.max.x);
-      const qz = clamp(this.pos.z, b.min.z, b.max.z);
+      if (this.pos.x < b.minX - r || this.pos.x > b.maxX + r || this.pos.z < b.minZ - r || this.pos.z > b.maxZ + r) continue;
+      const qx = clamp(this.pos.x, b.minX, b.maxX);
+      const qz = clamp(this.pos.z, b.minZ, b.maxZ);
       const dx = this.pos.x - qx;
       const dz = this.pos.z - qz;
       const d2 = dx * dx + dz * dz;
@@ -607,15 +607,15 @@ export class Titan {
         this.pos.x += (dx / d) * (r - d);
         this.pos.z += (dz / d) * (r - d);
       } else {
-        const l = this.pos.x - b.min.x;
-        const rr = b.max.x - this.pos.x;
-        const u = this.pos.z - b.min.z;
-        const dd = b.max.z - this.pos.z;
+        const l = this.pos.x - b.minX;
+        const rr = b.maxX - this.pos.x;
+        const u = this.pos.z - b.minZ;
+        const dd = b.maxZ - this.pos.z;
         const m = Math.min(l, rr, u, dd);
-        if (m === l) this.pos.x = b.min.x - r;
-        else if (m === rr) this.pos.x = b.max.x + r;
-        else if (m === u) this.pos.z = b.min.z - r;
-        else this.pos.z = b.max.z + r;
+        if (m === l) this.pos.x = b.minX - r;
+        else if (m === rr) this.pos.x = b.maxX + r;
+        else if (m === u) this.pos.z = b.minZ - r;
+        else this.pos.z = b.maxZ + r;
       }
     }
     for (const o of sim.titans) {

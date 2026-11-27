@@ -515,11 +515,11 @@ export class BotBrain {
     let bz = pl.z;
     for (const b of sim.world.boxes) {
       if (b.kind === "wall") continue;
-      const cx = (b.min.x + b.max.x) / 2;
-      const cz = (b.min.z + b.max.z) / 2;
+      const cx = (b.minX + b.maxX) / 2;
+      const cz = (b.minZ + b.maxZ) / 2;
       if (Math.hypot(cx - pl.x, cz - pl.z) > 55) continue;
-      if (b.max.y > top) {
-        top = b.max.y;
+      if (b.y1 > top) {
+        top = b.y1;
         bx = cx;
         bz = cz;
       }
@@ -842,7 +842,7 @@ export class BotBrain {
       const L = clamp(s.speed * 0.8, 8, 28);
       const hit = sim.world.raycast(s.pos, _look, L);
       if (hit && hit.box) {
-        const top = hit.box.max.y;
+        const top = hit.box.y1;
         if (hit.box.kind === "wall" || top > alt + 18) {
           this.wallT = 1.1;
           this.wallN.copy(hit.normal).setY(0);

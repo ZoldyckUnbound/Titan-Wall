@@ -1087,8 +1087,8 @@ export class Game implements Sim {
     g.fillRect(0, 0, S, S);
     g.fillStyle = "#5a5f66";
     for (const b of this.world.boxes) {
-      g.fillStyle = b.kind === "wall" ? "#8a8f96" : b.kind === "tower" ? "#9aa0a8" : "#4b5159";
-      g.fillRect(X(b.min.x), Y(b.max.z), (b.max.x - b.min.x) * k, (b.max.z - b.min.z) * k);
+      g.fillStyle = b.kind === "wall" ? "#8a8f96" : b.kind === "gate" ? "#9aa0a8" : "#4b5159";
+      g.fillRect(X(b.minX), Y(b.maxZ), (b.maxX - b.minX) * k, (b.maxZ - b.minZ) * k);
     }
     g.fillStyle = "#59e0ff";
     for (const d of this.world.depots) g.fillRect(X(d.pos.x) - 3, Y(d.pos.z) - 3, 6, 6);
