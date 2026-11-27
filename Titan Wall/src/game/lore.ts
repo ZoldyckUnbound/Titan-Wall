@@ -19,7 +19,7 @@ export interface Vec2 {
   z: number;
 }
 
-export const WALL_H = 50;
+export const WALL_H = 72; // taller than the 50 m of the anime's Wall Maria, so it reads as a true fortress
 export const WALL_T = 10;
 export const SINA_R = 2500;
 export const ROSE_R = 3800;
@@ -49,20 +49,20 @@ export interface District {
 
 export const DISTRICTS: District[] = [
   // ---- Wall Sina (innermost, 250 km in the series)
-  { id: "mitras", name: "Mitras", kind: "capital", wall: "sina", c: { x: 0, z: 0 }, r: 900, density: 520, style: "stone", fountain: true, note: "Capital of the Royal Government. Palace, cathedral and the Royal Fountain sit at the centre." },
-  { id: "stohess", name: "Stohess", kind: "town", wall: "sina", c: { x: -1550, z: -350 }, r: 430, density: 240, style: "plaster", fountain: true, note: "Stohess District, home of the Garrison's training grounds and Shiganshina's refugees." },
-  { id: "orvud", name: "Orvud", kind: "town", wall: "sina", c: { x: 1450, z: -600 }, r: 380, density: 150, style: "plaster", fountain: true, note: "Orvud District, a merchant quarter inside Wall Sina." },
-  { id: "ehrmich", name: "Ehrmich", kind: "village", wall: "sina", c: { x: -900, z: -1450 }, r: 360, density: 130, style: "timber", fountain: false, note: "Ehrmich District, quiet and wooded." },
-  { id: "yarckel", name: "Yarckel", kind: "village", wall: "sina", c: { x: 1100, z: 1250 }, r: 380, density: 140, style: "timber", fountain: false, note: "Yarckel District, a farming and craft town." },
+  { id: "mitras", name: "Mitras", kind: "capital", wall: "sina", c: { x: 0, z: 0 }, r: 900, density: 780, style: "stone", fountain: true, note: "Capital of the Royal Government. Palace, cathedral and the Royal Fountain sit at the centre." },
+  { id: "stohess", name: "Stohess", kind: "town", wall: "sina", c: { x: -1550, z: -350 }, r: 430, density: 360, style: "plaster", fountain: true, note: "Stohess District, home of the Garrison's training grounds and Shiganshina's refugees." },
+  { id: "orvud", name: "Orvud", kind: "town", wall: "sina", c: { x: 1450, z: -600 }, r: 380, density: 225, style: "plaster", fountain: true, note: "Orvud District, a merchant quarter inside Wall Sina." },
+  { id: "ehrmich", name: "Ehrmich", kind: "village", wall: "sina", c: { x: -900, z: -1450 }, r: 360, density: 195, style: "timber", fountain: false, note: "Ehrmich District, quiet and wooded." },
+  { id: "yarckel", name: "Yarckel", kind: "village", wall: "sina", c: { x: 1100, z: 1250 }, r: 380, density: 210, style: "timber", fountain: false, note: "Yarckel District, a farming and craft town." },
   // ---- Wall Rose (middle, 380 km in the series)
-  { id: "trost", name: "Trost", kind: "town", wall: "rose", c: { x: 300, z: 3250 }, r: 420, density: 360, style: "timber", fountain: true, note: "Southernmost district of Wall Rose. Site of the Battle of Trost and the Trost Gate." },
-  { id: "utopia", name: "Utopia", kind: "village", wall: "rose", c: { x: -200, z: -3200 }, r: 380, density: 120, style: "timber", fountain: false, note: "Northernmost district of Wall Rose, famed for its farms and bread." },
-  { id: "karanes", name: "Karanes", kind: "village", wall: "rose", c: { x: 3200, z: 300 }, r: 330, density: 110, style: "stone", fountain: false, note: "Eastern district of Wall Rose." },
-  { id: "krolva", name: "Krolva", kind: "village", wall: "rose", c: { x: -3050, z: -400 }, r: 320, density: 110, style: "plaster", fountain: false, note: "Western district of Wall Rose." },
-  { id: "jinae", name: "Jinae", kind: "village", wall: "rose", c: { x: -1700, z: 2650 }, r: 300, density: 90, style: "timber", fountain: false, note: "Southern town of Wall Rose, home of Marco Bodt." },
-  { id: "utgard", name: "Utgard Castle", kind: "ruin", wall: "rose", c: { x: 2350, z: -2050 }, r: 170, density: 26, style: "stone", fountain: false, note: "Abandoned castle near the inner side of Wall Rose, stocked with old provisions." },
+  { id: "trost", name: "Trost", kind: "town", wall: "rose", c: { x: 300, z: 3250 }, r: 420, density: 540, style: "timber", fountain: true, note: "Southernmost district of Wall Rose. Site of the Battle of Trost and the Trost Gate." },
+  { id: "utopia", name: "Utopia", kind: "village", wall: "rose", c: { x: -200, z: -3200 }, r: 380, density: 180, style: "timber", fountain: false, note: "Northernmost district of Wall Rose, famed for its farms and bread." },
+  { id: "karanes", name: "Karanes", kind: "village", wall: "rose", c: { x: 3200, z: 300 }, r: 330, density: 165, style: "stone", fountain: false, note: "Eastern district of Wall Rose." },
+  { id: "krolva", name: "Krolva", kind: "village", wall: "rose", c: { x: -3050, z: -400 }, r: 320, density: 165, style: "plaster", fountain: false, note: "Western district of Wall Rose." },
+  { id: "jinae", name: "Jinae", kind: "village", wall: "rose", c: { x: -1700, z: 2650 }, r: 300, density: 135, style: "timber", fountain: false, note: "Southern town of Wall Rose, home of Marco Bodt." },
+  { id: "utgard", name: "Utgard Castle", kind: "ruin", wall: "rose", c: { x: 2350, z: -2050 }, r: 170, density: 39, style: "stone", fountain: false, note: "Abandoned castle near the inner side of Wall Rose, stocked with old provisions." },
   // ---- Wall Maria (outermost, 480 km in the series)
-  { id: "shiganshina", name: "Shiganshina", kind: "town", wall: "maria", c: { x: 0, z: 4300 }, r: 400, density: 200, style: "timber", fountain: true, note: "Southern edge of Wall Maria. Eren, Mikasa and Armin's hometown. The Shiganshina Gate was breached by the Colossal Titan." },
+  { id: "shiganshina", name: "Shiganshina", kind: "town", wall: "maria", c: { x: 0, z: 4300 }, r: 400, density: 300, style: "timber", fountain: true, note: "Southern edge of Wall Maria. Eren, Mikasa and Armin's hometown. The Shiganshina Gate was breached by the Colossal Titan." },
 ];
 
 /** Shiganshina gate — the Wall Maria section that the Colossal Titan will kick open at wave 10. */

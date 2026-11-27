@@ -20,10 +20,10 @@ import type { Titan } from "./titan";
  */
 export const GRAVITY = 19;
 export const SCOUT_R = 0.85;
-export const HOOK_RANGE = 200;
+export const HOOK_RANGE = 230;
 const HOOK_SPEED = 260;
 const BOOST_ACC = 30;
-const BOOST_GAS = 10; // % per second
+const BOOST_GAS = 1.2; // % per second (was 10: a full tank now lasts about a minute of hard boosting)
 const REEL_ACC = 22;
 const REEL_SPEED = 16;
 const RUN_SPEED = 5.8;
@@ -96,6 +96,11 @@ const _n = new V3();
 const _f = new V3();
 const _r = new V3();
 const _ahead = new V3();
+
+/** Hook-assist offsets (yaw, pitch) in radians, tried in order: about 8 and 16 degrees around the aim. */
+const ASSIST_OFFSETS: [number, number][] = [
+  [0.14, 0], [-0.14, 0], [0, 0.14], [0, -0.14], [0.28, 0], [-0.28, 0], [0, 0.28], [0, -0.28],
+];
 
 export class Scout {
   readonly id: string;
@@ -209,7 +214,23 @@ export class Scout {
     const h = this.hooks[side];
     const o = this.handPos(side, _t);
     const d = _u.copy(dir).normalize();
-    const hit = sim.rayWorld(o, d, HOOK_RANGE, true);
+    let hit = sim.rayWorld(o, d, HOOK_RANGE, true);
+    // magnetic assist for the player: a near-miss snaps onto the first solid thing within ~16 degrees
+    if (this.isPlayer && (!hit || hit.kind === "ground")) {
+      const right = new THREE.Vector3().crossVectors(d, new THREE.Vector3(0, 1, 0));
+      if (right.lengthSq() > 1e-4) {
+        right.normalize();
+        for (const [yaw, pitch] of ASSIST_OFFSETS) {
+          const dd = d.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw).applyAxisAngle(right, pitch);
+          const alt = sim.rayWorld(o, dd, HOOK_RANGE, true);
+          if (alt && alt.kind !== "ground") {
+            hit = alt;
+            d.copy(dd);
+            break;
+          }
+        }
+      }
+    }
     h.state = "flying";
     h.tip.copy(o);
     h.age = 0;

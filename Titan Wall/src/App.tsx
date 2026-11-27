@@ -44,6 +44,7 @@ const CONTROLS: [React.ReactNode, string][] = [
   [<Key>F</Key>, "Throw a thunder spear along your aim (pins a Titan)"],
   [<><Key>W</Key><Key>A</Key><Key>S</Key><Key>D</Key></>, "Run / steer in the air"],
   [<Key>MOUSE</Key>, "Look (arrow keys also work)"],
+  [<Key wide>TAB</Key>, "Open the map: districts, depots, teammates and titans"],
   [<Key>M</Key>, "Mute / unmute sound"],
 ];
 
@@ -160,6 +161,114 @@ function PerkPicker({ progress, onLoadout }: { progress: Progress; onLoadout: (i
   );
 }
 
+function IntroCard({ intro, onSkip }: { intro: NonNullable<Snapshot["intro"]>; onSkip: () => void }) {
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => {
+      if (e.code === "Enter" || e.code === "NumpadEnter") onSkip();
+    };
+    window.addEventListener("keydown", k);
+    return () => window.removeEventListener("keydown", k);
+  }, [onSkip]);
+  return (
+    <div
+      className="absolute inset-0 z-30 flex cursor-pointer flex-col items-center justify-end bg-gradient-to-t from-black/90 via-black/40 to-black/10 pb-16"
+      onClick={onSkip}
+    >
+      <div className="max-w-2xl px-6 text-center">
+        <div className="text-[11px] font-bold tracking-[0.5em] text-amber-300/90">{intro.kicker}</div>
+        <div className="mt-2 font-serif text-5xl font-black tracking-[0.12em] text-white drop-shadow-[0_2px_20px_rgba(0,0,0,0.9)]">{intro.title}</div>
+        <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-slate-200">{intro.body}</p>
+        <div className="mt-3 text-xs tracking-widest text-red-300">{intro.forecast}</div>
+        <div className="mx-auto mt-5 h-1 w-64 overflow-hidden rounded bg-white/15">
+          <div className="h-full bg-amber-300 transition-[width] duration-100" style={{ width: `${(1 - intro.left) * 100}%` }} />
+        </div>
+        <div className="mt-3 text-[11px] text-slate-400">Click or press ENTER to deploy now</div>
+      </div>
+    </div>
+  );
+}
+
+type MapData = ReturnType<Game["mapSnapshot"]>;
+
+/** Tab map, in the spirit of the Among Us map: the whole campaign area, or closer in. */
+function MapView({ data, onClose }: { data: MapData; onClose: () => void }) {
+  const [zoom, setZoom] = useState<"world" | "maria" | "near">("maria");
+  const span = zoom === "world" ? data.mapR * 2 : zoom === "maria" ? 10400 : 2600;
+  const cx = zoom === "near" ? data.player.x : 0;
+  const cz = zoom === "near" ? data.player.z : 0;
+  const fs = span / 70; // label size in map units
+  const dot = span / 260;
+  const vb = `${cx - span / 2} ${cz - span / 2} ${span} ${span}`;
+  const inView = (x: number, z: number) => Math.abs(x - cx) < span / 2 + 200 && Math.abs(z - cz) < span / 2 + 200;
+  const alive = data.squad.filter((b) => b.alive).length;
+  const titans = data.titans;
+  const kindSize: Record<string, number> = { normal: 1, abnormal: 1.1, armored: 1.3, colossal: 2.6, beast: 1.7, reiss: 2.2, hammer: 2, founding: 2.8 };
+  return (
+    <div className="absolute inset-0 z-30 flex flex-col bg-black/85 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="mb-2 flex flex-wrap items-center gap-3 text-xs" onClick={(e) => e.stopPropagation()}>
+        <div className="font-serif text-lg font-black tracking-widest text-white">MAP</div>
+        {(["near", "maria", "world"] as const).map((z) => (
+          <button
+            key={z}
+            onClick={() => setZoom(z)}
+            className={`rounded border px-3 py-1 font-bold tracking-widest ${zoom === z ? "border-amber-300 bg-amber-300/20 text-amber-200" : "border-white/25 text-slate-300 hover:bg-white/10"}`}
+          >
+            {z === "near" ? "NEAR" : z === "maria" ? "MARIA" : "FULL MAP"}
+          </button>
+        ))}
+        <div className="ml-auto flex gap-3 text-slate-300">
+          <span><span className="text-white">●</span> You</span>
+          <span><span className="text-emerald-300">●</span> Squad ({alive} alive)</span>
+          <span><span className="text-red-400">●</span> Titans ({titans.length})</span>
+          <span><span className="text-cyan-300">■</span> Depot</span>
+          <span><span className="text-amber-300">▲</span> Shiganshina gate</span>
+        </div>
+        <button onClick={onClose} className="rounded border border-white/25 px-3 py-1 font-bold tracking-widest text-slate-200 hover:bg-white/10">CLOSE (TAB)</button>
+      </div>
+      <div className="min-h-0 flex-1">
+        <svg viewBox={vb} className="h-full w-full rounded-lg border border-white/15 bg-[#1b2a22]" preserveAspectRatio="xMidYMid meet" onClick={(e) => e.stopPropagation()}>
+          <circle cx={0} cy={0} r={data.mapR} fill="#22362b" />
+          {data.rings.map((r) => (
+            <g key={r.id}>
+              <circle cx={0} cy={0} r={r.r} fill={r.id === "sina" ? "#3c4a57" : r.id === "rose" ? "#4a5560" : "#56606a"} stroke="#c9c2b2" strokeWidth={dot * 0.5} />
+              {zoom !== "near" && (
+                <text x={0} y={-r.r - dot} fontSize={fs} fill="#e5e7eb" textAnchor="middle" opacity={0.8}>{r.name}</text>
+              )}
+            </g>
+          ))}
+          {data.districts
+            .filter((d) => inView(d.x, d.z))
+            .map((d) => (
+              <g key={d.id}>
+                <circle cx={d.x} cy={d.z} r={d.r} fill="#8a7a58" fillOpacity={0.35} stroke="#e8d9b0" strokeOpacity={0.5} strokeWidth={dot * 0.3} />
+                <text x={d.x} y={d.z} fontSize={fs * 0.9} fill="#fff7e0" textAnchor="middle" opacity={zoom === "world" ? 0.55 : 0.95}>{d.name}</text>
+              </g>
+            ))}
+          {data.depots.filter((d) => inView(d.x, d.z)).map((d) => (
+            <rect key={d.id} x={d.x - dot * 1.4} y={d.z - dot * 1.4} width={dot * 2.8} height={dot * 2.8} fill="#67e8f9" stroke="#0e7490" strokeWidth={dot * 0.3} />
+          ))}
+          <polygon
+            points={`${data.gate.x},${data.gate.z - dot * 2} ${data.gate.x - dot * 1.6},${data.gate.z + dot * 1.4} ${data.gate.x + dot * 1.6},${data.gate.z + dot * 1.4}`}
+            fill="#fcd34d"
+          />
+          {titans.filter((t) => inView(t.x, t.z)).map((t, i) => (
+            <circle key={i} cx={t.x} cy={t.z} r={dot * (kindSize[t.kind] ?? 1) * 1.1} fill={t.kind === "beast" ? "#fb923c" : t.kind === "reiss" || t.kind === "founding" ? "#f43f5e" : "#dc2626"} stroke="#000" strokeWidth={dot * 0.2} />
+          ))}
+          {data.squad.filter((b) => b.alive && inView(b.x, b.z)).map((b) => (
+            <g key={b.id}>
+              <circle cx={b.x} cy={b.z} r={dot * (b.named ? 1.5 : 0.9)} fill={b.color} stroke="#000" strokeWidth={dot * 0.25} />
+              {b.named && zoom !== "world" && (
+                <text x={b.x} y={b.z - dot * 2.2} fontSize={fs * 0.7} fill={b.color} textAnchor="middle" fontWeight="bold">{b.name}</text>
+              )}
+            </g>
+          ))}
+          <circle cx={data.player.x} cy={data.player.z} r={dot * 2} fill={data.player.alive ? "#fff" : "#666"} stroke="#059669" strokeWidth={dot * 0.6} />
+        </svg>
+      </div>
+    </div>
+  );
+}
+
 function Menu({
   onStart,
   onContinue,
@@ -230,6 +339,52 @@ function Menu({
           </div>
         </div>
 
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <div className="rounded-lg border border-white/15 bg-black/50 p-4">
+            <div className="text-[10px] font-bold tracking-[0.3em] text-amber-200/90">THE CAMPAIGN</div>
+            <div className="mt-1 text-xs text-slate-300">Lifetime waves cleared: <b className="text-white">{progress.totalWaves}</b> of 60</div>
+            <ol className="mt-2 space-y-1.5 text-xs">
+              {[
+                [1, "Wall Maria holds", "Pure and abnormal titans in the fields"],
+                [10, "The Colossal Breach", "The gate at Shiganshina falls"],
+                [20, "Beast Titans", "Stones fall from the forest canopy"],
+                [25, "Rod Reiss", "The titan with no face"],
+                [60, "The Founding Titan", "The last stand"],
+              ].map(([n, t, d]) => {
+                const reached = progress.totalWaves >= (n as number);
+                return (
+                  <li key={n as number} className={`flex gap-2 ${reached ? "text-emerald-300" : "text-slate-300"}`}>
+                    <span className="w-9 shrink-0 font-bold">{reached ? "✓" : ""}W{n}</span>
+                    <span>
+                      <b>{t as string}</b>
+                      <span className="block text-[11px] text-slate-400">{d as string}</span>
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
+          <div className="rounded-lg border border-white/15 bg-black/50 p-4 text-xs leading-relaxed text-slate-300">
+            <div className="text-[10px] font-bold tracking-[0.3em] text-amber-200/90">THE THREE WALLS</div>
+            <p className="mt-1">
+              <b className="text-white">Wall Maria</b> (4,800 m) is the outer wall, <b className="text-white">Wall Rose</b> (3,800 m) the middle, and <b className="text-white">Wall Sina</b> (2,500 m) the innermost. The walls stand 72 m tall.
+            </p>
+            <p className="mt-2">
+              The map is a 27 km region at 1:100,000 scale. Titans stay inside Maria until the wave-10 colossal breaches the gate.
+            </p>
+          </div>
+          <div className="rounded-lg border border-white/15 bg-black/50 p-4 text-xs leading-relaxed text-slate-300">
+            <div className="text-[10px] font-bold tracking-[0.3em] text-amber-200/90">NEW IN THIS BUILD</div>
+            <ul className="mt-1 list-disc space-y-1 pl-4">
+              <li>A day and night cycle: each in-game day lasts 10 minutes of play.</li>
+              <li>Press <b className="text-white">TAB</b> for the map of every district, depot, teammate and titan.</li>
+              <li>A title card before every wave shows what is coming.</li>
+              <li>Fifty more Survey Corps recruits patrol Wall Maria.</li>
+              <li>Boost burns far less gas, and the hook assist snaps near-misses onto a wall.</li>
+            </ul>
+          </div>
+        </div>
+
         <PerkPicker progress={progress} onLoadout={onLoadout} />
 
         <div className="mt-5 flex flex-col items-center gap-2">
@@ -272,6 +427,7 @@ export default function App() {
   progressRef.current = progress;
   const [touch] = useState(() => isTouchDevice());
   const [snap, setSnap] = useState<Snapshot | null>(null);
+  const [mapData, setMapData] = useState<MapData | null>(null);
   const [phase, setPhase] = useState<Phase>("menu");
   const [barks, setBarks] = useState<TimedBark[]>([]);
   const [toasts, setToasts] = useState<TimedToast[]>([]);
@@ -306,11 +462,16 @@ export default function App() {
         { canvas: canvasRef.current, overlay: overlayRef.current ?? undefined, minimap: miniEl.current ?? undefined }
       );
       gameRef.current = game;
+      game.setCinematics(true); // wave title cards
       game.run();
       setLoading(false);
     })();
     iv = window.setInterval(() => {
-      if (game) setSnap(game.snapshot());
+      if (game) {
+        const snapNow = game.snapshot();
+        setSnap(snapNow);
+        if (snapNow.mapOpen) setMapData(game.mapSnapshot());
+      }
       const now = performance.now();
       setBarks((p) => (p.some((b) => now - b.at > 9000) ? p.filter((b) => now - b.at < 9000) : p));
       setToasts((p) => (p.some((t) => now - t.at > 3200) ? p.filter((t) => now - t.at < 3200) : p));
@@ -576,6 +737,14 @@ export default function App() {
       {s && phase === "playing" && touch && gameRef.current && (
         <TouchPad game={gameRef.current} onPause={() => gameRef.current?.pause()} />
       )}
+
+      {/* wave title card: shown before every wave; click or Enter skips it */}
+      {phase === "playing" && snap?.intro && (
+        <IntroCard intro={snap.intro} onSkip={() => gameRef.current?.skipIntro()} />
+      )}
+
+      {/* Tab map: the whole of Wall Maria, Rose and Sina with every living unit */}
+      {phase === "playing" && snap?.mapOpen && mapData && <MapView data={mapData} onClose={() => gameRef.current?.toggleMap()} />}
 
       {/* pause */}
       {phase === "paused" && tutStep === null && (

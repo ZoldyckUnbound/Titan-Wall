@@ -17,8 +17,11 @@ for (const b of g.brains) { b.scout.alive = true; }
 // 1. roster
 const bots = g.brains;
 check(bots.length >= 5, `squad has ${bots.length} teammates`);
-const kinds = new Set(bots.map((b) => b.P.kind));
-check(kinds.size === bots.length, "every teammate has a distinct personality");
+// the five named teammates each have their own temperament; recruits reuse them
+const named = bots.slice(0, 5);
+const kinds = new Set(named.map((b) => b.P.kind));
+check(kinds.size === named.length, "every named teammate has a distinct personality");
+check(bots.length - named.length >= 1, `extra recruits join the squad (${bots.length - named.length} recruits)`);
 check(bots.every((b) => b.P.retreatAt > 0 && b.P.retreatAt < 1), "every teammate has a retreat threshold");
 check(bots.every((b) => b.scout.crashScale <= 0.5), "teammates resist crashing (crashScale ≤ 0.5); player does not");
 check(g.player.crashScale === 1, "player takes full crash damage");

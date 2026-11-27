@@ -62,29 +62,29 @@ export function waveSpec(n: number): WaveSpec {
 
   if (wave === BEAST_WAVE) {
     // beast titans only
-    add("beast", 3 + Math.floor(wave / 20), () => rnd(26, 30));
+    add("beast", 5 + Math.floor(wave / 20), () => rnd(26, 30));
     return { n: wave, title: "Beast Titans", spawns, colossalKick: false, breachReinforce };
   }
 
   if (wave === KICK_WAVE) {
     add("colossal", 1, () => 48, true);
-    add("normal", 3, normalH);
-    add("abnormal", 1, () => rnd(10, 12));
-    add("armored", 2, () => rnd(13, 15), true, breachReinforce);
-    add("normal", 4, normalH, true, breachReinforce);
+    add("normal", 6, normalH);
+    add("abnormal", 2, () => rnd(10, 12));
+    add("armored", 3, () => rnd(13, 15), true, breachReinforce);
+    add("normal", 8, normalH, true, breachReinforce);
     return { n: wave, title: "Colossal Breach", spawns, colossalKick: true, breachReinforce };
   }
 
   if (wave === REISS_WAVE) {
     add("reiss", 1, () => 46);
-    add("abnormal", 2 + Math.floor(wave / 25), () => rnd(10, 12));
-    add("normal", 3, normalH);
+    add("abnormal", 4 + Math.floor(wave / 25), () => rnd(10, 12));
+    add("normal", 6, normalH);
     return { n: wave, title: "Rod Reiss", spawns, colossalKick: false, breachReinforce };
   }
 
-  const normals = Math.min(2 + Math.floor(wave / 4), 8);
-  const abnormals = wave >= 2 ? Math.min(Math.floor((wave - 1) / 5), 3) : 0;
-  const armored = wave >= ARMORED_FROM ? Math.min(1 + Math.floor((wave - ARMORED_FROM) / 8), 3) : 0;
+  const normals = Math.min(4 + Math.floor(wave / 3), 14);
+  const abnormals = wave >= 2 ? Math.min(1 + Math.floor((wave - 1) / 4), 6) : 0;
+  const armored = wave >= ARMORED_FROM ? Math.min(2 + Math.floor((wave - ARMORED_FROM) / 6), 6) : 0;
   add("normal", normals, normalH);
   add("abnormal", abnormals, () => rnd(10, 12));
   add("armored", armored, () => rnd(13, 15));
@@ -92,8 +92,8 @@ export function waveSpec(n: number): WaveSpec {
     // the last stand: the Founding Titan leads a war-hammer escort, with beasts and Reiss behind
     add("founding", 1, () => 60);
     add("hammer", 2, () => rnd(32, 36));
-    add("beast", 2, () => rnd(26, 30));
-    add("reiss", 1, () => 46);
+    add("beast", 4, () => rnd(26, 30));
+    add("reiss", 2, () => 46);
   }
   const title = wave === FINAL_WAVE ? "The Founding Titan" : abnormals ? `${abnormals} Abnormal` : "Titans";
   return { n: wave, title, spawns, colossalKick: false, breachReinforce };

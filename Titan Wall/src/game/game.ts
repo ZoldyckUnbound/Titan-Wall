@@ -6,6 +6,8 @@ import { Scout, newControl, clearControl, SCOUT_R, HOOK_RANGE } from "./scout";
 import type { ScoutControl } from "./scout";
 import { Titan } from "./titan";
 import { Sfx } from "./audio";
+import { introFor, INTRO_SECONDS, type IntroCard } from "./cutscene";
+import { DAY_SEC, START_HOUR, skyLight, clockLabel, periodName } from "./daynight";
 import { BotBrain, PERSONALITIES, makeBrains, formatBark, stateLabel } from "./bots";
 import type { BotKind } from "./bots";
 import type { Sim, RayHit, BarkKey } from "./types";
@@ -14,7 +16,7 @@ import { BASE_STATS, applyLoadout } from "./perks";
 import type { BaseStats } from "./perks";
 import { Music } from "./music";
 import type { SpawnSpec, SpawnKind } from "./waves";
-import { MARIA_R, ROSE_R, wallRingAt } from "./lore";
+import { MARIA_R, ROSE_R, SINA_R, MAP_R, SHIG_GATE, DISTRICTS, DEPOTS, wallRingAt } from "./lore";
 
 /** A depot is out of order while a titan is this close (game units). */
 const DEPOT_LOCK_R = 45;
@@ -70,6 +72,10 @@ export interface Snapshot {
   score: number;
   waveClear: boolean;
   waveTimer: number;
+  clock: string;
+  period: string;
+  intro: { kicker: string; title: string; body: string; forecast: string; left: number } | null;
+  mapOpen: boolean;
   grabbed: boolean;
   struggle: number;
   eatProgress: number;
@@ -107,6 +113,9 @@ const _r = new V3();
 const _aimO = new V3();
 
 /** Damage a glancing (sub-clean) nape cut does to plated titans. Plated kinds need a 1.35× clean cut to die. */
+/** Extra Survey Corps scouts that patrol Wall Maria with the squad (the named five are always there). */
+const EXTRA_SCOUTS = 50;
+const RECRUIT_THINK_EVERY = 12;
 const PLATE_DMG: Partial<Record<SpawnKind, number>> = { armored: 10, hammer: 120, founding: 250 };
 
 /** How long a hook press waits for the hook to be ready (cooldown or stun) before it is dropped. */
@@ -114,7 +123,7 @@ const HOOK_BUFFER = 0.3;
 
 export class Game implements Sim {
   readonly scene = new THREE.Scene();
-  readonly camera = new THREE.PerspectiveCamera(72, 1, 0.3, 2500);
+  readonly camera = new THREE.PerspectiveCamera(72, 1, 0.3, 14000);
   renderer: THREE.WebGLRenderer | null = null;
   world: World;
   fx: FX;
@@ -182,6 +191,15 @@ export class Game implements Sim {
   private brainOf = new Map<string, BotBrain>();
   private sun!: THREE.DirectionalLight;
   private sky!: THREE.Mesh;
+  private skyMat!: THREE.ShaderMaterial;
+  private hemi!: THREE.HemisphereLight;
+  /** time of day as a fraction of a day (0 = sunrise); see daynight.ts */
+  dayT = (START_HOUR - 6) / 24;
+  private thinkFrame = 0;
+  /** wave title cards and the Tab map (App turns cinematics on; tests leave them off) */
+  cinematics = false;
+  intro: (IntroCard & { t: number }) | null = null;
+  mapOpen = false;
   private w = 1280;
   private h = 720;
   private raf = 0;
@@ -199,7 +217,7 @@ export class Game implements Sim {
     this.world = new World(1337);
     this.fx = new FX();
     this.scene.add(this.world.group, this.fx.group);
-    this.scene.fog = new THREE.FogExp2(0xbfd0dc, 0.0032);
+    this.scene.fog = new THREE.FogExp2(0xbfd0dc, 0.00075);
     this.scene.background = new THREE.Color(0xbfd0dc);
     this.setupLights();
 
@@ -233,8 +251,30 @@ export class Game implements Sim {
           crashResist: 0.3,
         })
     );
-    this.scouts = [this.player, ...bots];
-    this.brains = makeBrains(bots, defs.map((d) => d.kind), this.player);
+    // the Survey Corps roster: more scouts spread across Wall Maria, with the same five temperaments
+    const extras: Scout[] = [];
+    const extraKinds: BotKind[] = [];
+    const extraNames: string[] = [];
+    for (let i = 0; i < EXTRA_SCOUTS; i++) {
+      const d = defs[i % defs.length];
+      extraKinds.push(d.kind);
+      extraNames.push(`Recruit ${String(i + 1).padStart(2, "0")}`);
+      extras.push(
+        new Scout({
+          id: `recruit-${i}`,
+          name: extraNames[i],
+          isPlayer: false,
+          palette: d.pal,
+          maxHp: d.hp,
+          killSpeed: d.ks,
+          dmgMult: d.dm,
+          crashResist: 0.3,
+        })
+      );
+    }
+    const all = [...bots, ...extras];
+    this.scouts = [this.player, ...all];
+    this.brains = makeBrains(all, [...defs.map((d) => d.kind), ...extraKinds], this.player, [...bots.map((b) => b.name), ...extraNames]);
     this.brains.forEach((b) => this.brainOf.set(b.scout.id, b));
     for (const s of this.scouts) this.scene.add(s.model);
 
@@ -245,6 +285,7 @@ export class Game implements Sim {
   // ------------------------------------------------------------------ setup
   private setupLights() {
     const hemi = new THREE.HemisphereLight(0xdbe8ff, 0x6b5f50, 1.05);
+    this.hemi = hemi;
     this.scene.add(hemi);
     this.sun = new THREE.DirectionalLight(0xfff0d6, 2.6);
     this.sun.castShadow = true;
@@ -260,7 +301,7 @@ export class Game implements Sim {
     this.sun.shadow.normalBias = 0.5;
     this.scene.add(this.sun, this.sun.target);
 
-    const mat = new THREE.ShaderMaterial({
+    const mat = (this.skyMat = new THREE.ShaderMaterial({
       side: THREE.BackSide,
       depthWrite: false,
       uniforms: { top: { value: new THREE.Color(0x3d78c8) }, horizon: { value: new THREE.Color(0xd2dfeb) } },
@@ -283,8 +324,8 @@ export class Game implements Sim {
         "  #include <colorspace_fragment>",
         "}",
       ].join("\n"),
-    });
-    this.sky = new THREE.Mesh(new THREE.SphereGeometry(1500, 24, 12), mat);
+    }));
+    this.sky = new THREE.Mesh(new THREE.SphereGeometry(9000, 32, 16), mat);
     this.sky.frustumCulled = false;
     this.scene.add(this.sky);
   }
@@ -341,6 +382,7 @@ export class Game implements Sim {
       if (e.code === "KeyF") this.pendSpear = true;
       if (e.code === "Space") this.pendStruggle = true;
       if (e.code === "KeyP") this.pause();
+      if (e.code === "Tab") this.toggleMap();
       if (e.code === "KeyM") this.sfx.toggleMute();
     });
     on(window, "keyup", (e) => {
@@ -472,7 +514,13 @@ export class Game implements Sim {
     this.camYaw = 0;
     this.camPitch = -0.12;
     this.brains.forEach((b, i) => {
-      b.scout.reset(_v.set(sp.x + [-5, 5, 0, -9, 9][i], 1, sp.z + [2, 2, -5, -1, -1][i]));
+      if (i < 5) {
+        b.scout.reset(_v.set(sp.x + [-5, 5, 0, -9, 9][i], 1, sp.z + [2, 2, -5, -1, -1][i]));
+      } else {
+        // recruits are spread over Wall Maria, away from the titans' spawn band
+        const p = this.freeSpot(ROSE_R + 60, MARIA_R - 80, (x, z) => Math.hypot(x - sp.x, z - sp.z) > 60);
+        b.scout.reset(p ? _v.set(p.x, 1, p.z) : _v.set(sp.x + 6 + i, 1, sp.z + 6));
+      }
       b.scout.kills = 0;
       b.respawn();
     });
@@ -523,6 +571,7 @@ export class Game implements Sim {
     this.waveState = "active";
     this.reinforce();
     const spec = waveSpec(n);
+    if (this.cinematics) this.intro = { ...introFor(spec), t: INTRO_SECONDS };
     const spawned: V3[] = [];
     const inMaria = (x: number, z: number) => {
       const d = Math.hypot(x, z);
@@ -927,11 +976,19 @@ export class Game implements Sim {
     if (this.phase !== "playing") {
       return;
     }
+    // the wave title card and the Tab map hold the simulation still
+    if (this.intro) {
+      this.intro.t -= dtReal;
+      if (this.intro.t <= 0) this.intro = null;
+      return;
+    }
+    if (this.mapOpen) return;
     this.slowT = Math.max(0, this.slowT - dtReal);
     this.world.nav.beginFrame();
     this.timeScale = damp(this.timeScale, this.slowT > 0 ? 0.3 : 1, 12, dtReal);
     const dt = Math.min(dtReal, 1 / 20) * this.timeScale;
     this.time += dt;
+    this.dayT = (this.dayT + dt / DAY_SEC) % 1;
     this.comboT -= dt;
     if (this.comboT <= 0) this.combo = 0;
 
@@ -941,8 +998,14 @@ export class Game implements Sim {
     this.updateAim();
     this.buildPlayerCtrl(dtReal);
 
-    for (const b of this.brains) {
-      const ctrl = b.think(dt, this);
+    // the named five think every frame; recruits think every 12th frame (with 12x dt, so their timers keep time)
+    // and hold their last control in between. This keeps 55 scouts within the frame budget.
+    this.thinkFrame++;
+    for (let i = 0; i < this.brains.length; i++) {
+      const b = this.brains[i];
+      let ctrl = b.ctrl;
+      if (i < 5) ctrl = b.think(dt, this);
+      else if ((this.thinkFrame + i) % RECRUIT_THINK_EVERY === 0) ctrl = b.think(dt * RECRUIT_THINK_EVERY, this);
       b.scout.update(dt, ctrl, this);
     }
     this.player.update(dt, this.playerCtrl, this);
@@ -1152,10 +1215,71 @@ export class Game implements Sim {
     this.camera.updateProjectionMatrix();
   }
 
+  /** A slow sweep around the player during the wave title card. */
+  private introCamera() {
+    const a = performance.now() * 0.00012;
+    const c = this.player.pos;
+    this.camera.position.set(c.x + Math.cos(a) * 58, c.y + 26 + Math.sin(a * 2) * 4, c.z + Math.sin(a) * 58);
+    this.camera.lookAt(c.x, c.y + 4, c.z);
+  }
+
+  setCinematics(on: boolean) {
+    this.cinematics = on;
+  }
+
+  skipIntro() {
+    this.intro = null;
+  }
+
+  toggleMap() {
+    if (this.phase !== "playing") return;
+    this.mapOpen = !this.mapOpen;
+    this.keys.clear();
+    this.mouse[0] = this.mouse[1] = false;
+  }
+
+  /** Everything the Tab map needs to draw: rings, districts, depots, the gate, and every living unit. */
+  mapSnapshot() {
+    const p = this.player;
+    return {
+      mapR: MAP_R,
+      rings: [
+        { id: "maria", r: MARIA_R, name: "Wall Maria" },
+        { id: "rose", r: ROSE_R, name: "Wall Rose" },
+        { id: "sina", r: SINA_R, name: "Wall Sina" },
+      ],
+      gate: { x: SHIG_GATE.x, z: SHIG_GATE.z },
+      districts: DISTRICTS.map((d) => ({ id: d.id, name: d.name, kind: d.kind, x: d.c.x, z: d.c.z, r: d.r })),
+      depots: DEPOTS.map((d) => ({ id: d.id, name: d.name, x: d.c.x, z: d.c.z })),
+      player: { x: p.pos.x, z: p.pos.z, alive: p.alive },
+      squad: this.brains.map((b) => ({ id: b.scout.id, name: b.P.name, color: b.P.color, x: b.scout.pos.x, z: b.scout.pos.z, alive: b.scout.alive, named: this.brains.indexOf(b) < 5 })),
+      titans: this.titans.filter((t) => t.alive).map((t) => ({ kind: t.kind, x: t.pos.x, z: t.pos.z })),
+    };
+  }
+
+  /** Sun, moon, sky and fog follow the in-game clock (see daynight.ts). */
+  private applyDayNight() {
+    const L = skyLight(this.dayT);
+    const c = (rgb: [number, number, number]) => new THREE.Color(rgb[0], rgb[1], rgb[2]);
+    const az = L.azimuth;
+    const h = Math.max(L.elevation, 0.12);
+    this.sun.position.set(this.player.pos.x + Math.cos(az) * 150, h * 170, this.player.pos.z + 50);
+    this.sun.target.position.copy(this.player.pos);
+    this.sun.color.copy(c(L.sunColor));
+    this.sun.intensity = L.sunIntensity;
+    this.hemi.color.copy(c(L.hemiSky));
+    this.hemi.intensity = L.hemiIntensity;
+    this.skyMat.uniforms.top.value.copy(c(L.skyTop));
+    this.skyMat.uniforms.horizon.value.copy(c(L.skyHorizon));
+    (this.scene.background as THREE.Color).copy(c(L.skyHorizon));
+    (this.scene.fog as THREE.FogExp2).color.copy(c(L.skyHorizon));
+  }
+
   render() {
     if (!this.renderer) return;
     const dt = 1 / 60;
-    if (this.phase === "playing") this.updateCamera(dt);
+    if (this.phase === "playing" && this.intro) this.introCamera();
+    else if (this.phase === "playing") this.updateCamera(dt);
     else if (this.phase === "menu") {
       // slow orbit around the town for the title screen
       const a = performance.now() * 0.00008;
@@ -1163,7 +1287,7 @@ export class Game implements Sim {
       this.camera.lookAt(0, 8, 0);
     }
     this.sky.position.copy(this.camera.position);
-    this.sun.position.set(this.player.pos.x + 90, 150, this.player.pos.z + 50);
+    this.applyDayNight();
     this.sun.target.position.copy(this.player.pos);
     // ropes
     this.fx.beginRopes();
@@ -1413,7 +1537,7 @@ export class Game implements Sim {
       grabbed: !!grabbedBy,
       struggle: p.struggle,
       eatProgress: 0,
-      squad: this.brains.map((b) => ({
+      squad: this.brains.slice(0, 5).map((b) => ({
         id: b.scout.id,
         name: b.P.name,
         title: b.P.title,
@@ -1434,6 +1558,10 @@ export class Game implements Sim {
       resupplying: this.resupplying,
       lock: this.lockActive ? "locked" : this.edgePan ? "edge" : "none",
       deathCause: this.deathCause,
+      intro: this.intro ? { kicker: this.intro.kicker, title: this.intro.title, body: this.intro.body, forecast: this.intro.forecast, left: this.intro.t / INTRO_SECONDS } : null,
+      mapOpen: this.mapOpen,
+      clock: clockLabel(this.dayT),
+      period: periodName(this.dayT),
     };
   }
 }

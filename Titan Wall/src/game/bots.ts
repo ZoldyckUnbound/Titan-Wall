@@ -1094,9 +1094,12 @@ export class BotBrain {
   }
 }
 
-export function makeBrains(scouts: Scout[], kinds: BotKind[], player: Scout): BotBrain[] {
+export function makeBrains(scouts: Scout[], kinds: BotKind[], player: Scout, names: string[] = []): BotBrain[] {
   const brains = scouts.map((s, i) => {
-    const b = new BotBrain(s, PERSONALITIES[kinds[i]]);
+    // extra recruits share a temperament but get their own name, so the HUD can tell them apart
+    const base = PERSONALITIES[kinds[i]];
+    const P = names[i] ? { ...base, name: names[i] } : base;
+    const b = new BotBrain(s, P);
     b.player = player;
     return b;
   });
