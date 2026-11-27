@@ -601,7 +601,7 @@ export default function App() {
             <div className={`rounded-md border border-white/20 bg-black/40 p-1 ${touch ? "hidden" : ""}`}>
               <canvas ref={miniRef} width={168} height={168} className="block h-[168px] w-[168px] rounded" />
             </div>
-            <div className="mt-1 flex justify-between px-1 font-mono text-[11px] text-slate-200">
+            <div className={touch ? "fixed left-1/2 top-[52px] z-10 flex -translate-x-1/2 gap-3 rounded bg-black/50 px-3 py-0.5 font-mono text-[11px] text-slate-200" : "mt-1 flex justify-between px-1 font-mono text-[11px] text-slate-200"}>
               <span>{Math.round(s.speed)} m/s</span>
               <span className={s.speed >= s.killSpeed ? "text-emerald-300" : "text-slate-400"}>
                 {s.speed >= s.killSpeed ? "CUT READY" : `need ${s.killSpeed}`}
