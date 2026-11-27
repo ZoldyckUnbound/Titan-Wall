@@ -34,6 +34,14 @@ const LIMB_JOINTS: { joint: "elbowL" | "elbowR" | "kneeL" | "kneeR"; kind: HitSp
   { joint: "kneeR", kind: "knee", r: 0.085 },
 ];
 
+// forearms and thighs: a volume at the midpoint of each long limb segment, so limbs are hit between joints too
+const LIMB_MIDS: { a: "shoulderL" | "shoulderR" | "hipL" | "hipR"; b: "elbowL" | "elbowR" | "kneeL" | "kneeR"; kind: HitSphere["kind"]; r: number }[] = [
+  { a: "shoulderL", b: "elbowL", kind: "arm", r: 0.05 },
+  { a: "shoulderR", b: "elbowR", kind: "arm", r: 0.05 },
+  { a: "hipL", b: "kneeL", kind: "legs", r: 0.075 },
+  { a: "hipR", b: "kneeR", kind: "legs", r: 0.075 },
+];
+
 // unit-height-space body hit volumes (nape handled separately)
 /** Per-kind overrides for the specialist titans. Normals and abnormals keep the height-based formulas. */
 const KIND_TUNE: Partial<Record<SpawnKind, { walk: number; run: number; turn: number; windup: number; recover: number; reach: number; hitR: number }>> = {
@@ -154,6 +162,7 @@ export class Titan {
       this.spheres.push({ c: new V3(), r: 1, kind: i === 0 ? "nape" : BODY_SPHERES[i - 1].kind });
     // limb volumes: elbows and knees follow the animated rig (see updateLimbs)
     for (let i = 0; i < LIMB_JOINTS.length; i++) this.spheres.push({ c: new V3(), r: 1, kind: LIMB_JOINTS[i].kind });
+    for (let i = 0; i < LIMB_MIDS.length; i++) this.spheres.push({ c: new V3(), r: 1, kind: LIMB_MIDS[i].kind });
     this.updateSpheres();
   }
 
@@ -433,11 +442,23 @@ export class Titan {
   private updateLimbs() {
     this.model.updateMatrixWorld(true);
     const P = this.parts;
+    const base = BODY_SPHERES.length + 1;
     LIMB_JOINTS.forEach((L, i) => {
-      const s = this.spheres[BODY_SPHERES.length + 1 + i];
+      const s = this.spheres[base + i];
       const j = P[L.joint];
       if (j) j.getWorldPosition(s.c);
       s.r = L.r * this.height;
+    });
+    const mid = base + LIMB_JOINTS.length;
+    LIMB_MIDS.forEach((M, i) => {
+      const s = this.spheres[mid + i];
+      const a = P[M.a], b = P[M.b];
+      if (a && b) {
+        a.getWorldPosition(_a);
+        b.getWorldPosition(_b);
+        s.c.set((_a.x + _b.x) / 2, (_a.y + _b.y) / 2, (_a.z + _b.z) / 2);
+      }
+      s.r = M.r * this.height;
     });
   }
 

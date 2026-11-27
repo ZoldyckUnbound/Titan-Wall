@@ -92,6 +92,18 @@ const knee = (T3.parts as any).kneeR as import("three").Object3D;
 const kp = new V(); knee.getWorldPosition(kp);
 const kn = T3.spheres[5 + 3]; // right knee (limb volumes follow elbowL, elbowR, kneeL, kneeR)
 check(kn.c.distanceTo(kp) < 1e-3 && kn.r > 0, "knee hit volume sits on the knee joint");
+// forearm and thigh volumes sit at the midpoint of their segment and follow the rig
+const hipR = (T3.parts as any).hipR as import("three").Object3D;
+const shR = (T3.parts as any).shoulderR as import("three").Object3D;
+const hp = new V(), sp = new V(); hipR.getWorldPosition(hp); shR.getWorldPosition(sp);
+const thighMid = T3.spheres[5 + 4 + 3]; // after 4 body spheres + 4 limb joints: [arm L, arm R, thigh L, thigh R]
+const forearmMid = T3.spheres[5 + 4 + 1];
+const elbowR = (T3.parts as any).elbowR as import("three").Object3D;
+const er = new V(); elbowR.getWorldPosition(er);
+check(forearmMid.c.distanceTo(new V((sp.x + er.x) / 2, (sp.y + er.y) / 2, (sp.z + er.z) / 2)) < 1e-3, "right forearm volume sits mid-segment (shoulder to elbow)");
+check(thighMid.c.distanceTo(new V((hp.x + kp.x) / 2, (hp.y + kp.y) / 2, (hp.z + kp.z) / 2)) < 1e-3, "right thigh volume sits mid-segment (hip to knee)");
+check(thighMid.kind === "legs" && forearmMid.kind === "arm" && thighMid.r > 0 && forearmMid.r > 0, "forearm and thigh volumes have the right kinds and radii");
+
 const sc3 = g3.player;
 g3.brains.forEach((b) => (b.scout.alive = false));
 sc3.invuln = 99;
