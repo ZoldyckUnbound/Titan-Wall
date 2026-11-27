@@ -111,6 +111,8 @@ export class Scout {
   bladeDur = 100;
   spare = 3;
   maxSpare = 4;
+  /** Perk multiplier on hook cooldowns (1 = as designed). */
+  cooldownMult = 1;
   /** Thunder spears (player only): thrown along the aim, pin a titan for a few seconds. */
   spears = 0;
   maxSpears = 3;
@@ -200,7 +202,7 @@ export class Scout {
     const h = this.hooks[side];
     h.state = "idle";
     h.titan = null;
-    h.cooldown = 0.18;
+    h.cooldown = 0.18 * this.cooldownMult;
   }
 
   private fireHook(side: number, dir: THREE.Vector3, sim: Sim) {
@@ -313,7 +315,7 @@ export class Scout {
           h.tip.copy(h.anchor);
           if (h.missed) {
             h.state = "idle";
-            h.cooldown = 0.3;
+            h.cooldown = 0.3 * this.cooldownMult;
           } else {
             h.state = "attached";
             h.age = 0;

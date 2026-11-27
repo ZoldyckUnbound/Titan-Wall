@@ -10,6 +10,8 @@ import { BotBrain, PERSONALITIES, makeBrains, formatBark, stateLabel } from "./b
 import type { BotKind } from "./bots";
 import type { Sim, RayHit, BarkKey } from "./types";
 import { waveSpec, FINAL_WAVE } from "./waves";
+import { BASE_STATS, applyLoadout } from "./perks";
+import type { BaseStats } from "./perks";
 import { Music } from "./music";
 import type { SpawnSpec, SpawnKind } from "./waves";
 import { MARIA_R, ROSE_R, wallRingAt } from "./lore";
@@ -85,6 +87,8 @@ export interface GameCallbacks {
   onBark?: (b: BarkMsg) => void;
   onToast?: (t: ToastMsg) => void;
   onPhase?: (p: Phase) => void;
+  /** A wave was cleared (the progress total counts these across runs). */
+  onWaveCleared?: (wave: number) => void;
 }
 
 const PRIORITY = new Set<BarkKey>(["grabbed", "ally_grabbed", "rescue_go", "panic", "rescued", "wave_start", "spot_abnormal"]);
@@ -133,6 +137,8 @@ export class Game implements Sim {
   /** Touch layer state (written by the on-screen pad in Touch.tsx). mx/my: stick, +my is forward. */
   readonly touch = { mx: 0, my: 0, boost: false, hold: [false, false] as [boolean, boolean], lookX: 0, lookY: 0, active: false };
   private pendSlash = false;
+  /** Perk-adjusted player stats for the current run, and the loadout they came from. */
+  private stats: BaseStats = BASE_STATS;
   private pendSwap = false;
   private pendSpear = false;
   private music = new Music();
@@ -454,6 +460,7 @@ export class Game implements Sim {
     this.noticedAbnormal.clear();
     this.lastBark.clear();
     const sp = this.world.playerSpawn;
+    this.applyStats();
     this.player.reset(_v.set(sp.x, 1, sp.z));
     this.player.kills = 0;
     this.player.spears = 2;
@@ -466,6 +473,22 @@ export class Game implements Sim {
       b.respawn();
     });
     this.camTarget.copy(this.player.pos);
+  }
+
+  /** Perk loadout for the next run (the menu sets it before deploying). */
+  setLoadout(ids: string[], totalWaves: number) {
+    this.stats = applyLoadout(BASE_STATS, ids, totalWaves);
+  }
+
+  private applyStats() {
+    const p = this.player;
+    const s = this.stats;
+    p.maxHp = s.maxHp;
+    p.maxGas = s.maxGas;
+    p.maxSpare = s.maxSpare;
+    p.killSpeed = s.killSpeed;
+    p.maxSpears = s.maxSpears;
+    p.cooldownMult = s.hookCooldown;
   }
 
   dispose() {
@@ -975,6 +998,7 @@ export class Game implements Sim {
       this.waveState = "clear";
       this.waveTimer = 8;
       this.toast(`WAVE ${this.wave} CLEARED — resupply at the depots!`, "good");
+      this.cb.onWaveCleared?.(this.wave);
       this.score += 200 * this.wave;
       const b = pick(this.brains);
       if (b.scout.alive) this.bark(b.scout, "wave_clear");
@@ -1077,7 +1101,7 @@ export class Game implements Sim {
         if (s.isPlayer) {
           this.resupplying = true;
           this.spearT += dt;
-          if (this.spearT >= 6 && s.spears < s.maxSpears) {
+          if (this.spearT >= this.stats.spearRestock && s.spears < s.maxSpears) {
             s.spears++;
             this.spearT = 0;
             this.toast(`Thunder spear restocked (${s.spears}/${s.maxSpears})`, "good");

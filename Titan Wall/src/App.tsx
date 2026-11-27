@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Ending } from "./Ending";
 import { TouchPad, isTouchDevice } from "./Touch";
+import { FAMILIES, MAX_LOADOUT, PERKS, TIER_WAVES, EMPTY_PROGRESS, isUnlocked, loadProgress, saveProgress, sanitizeLoadout } from "./game/perks";
+import type { Progress } from "./game/perks";
 import { Game } from "./game/game";
 import type { BarkMsg, Phase, Snapshot, ToastMsg } from "./game/game";
 import { loadAssets } from "./game/assets";
@@ -112,7 +114,69 @@ function Tutorial({ step, onNext, onSkip, touch }: { step: number; onNext: () =>
   );
 }
 
-function Menu({ onStart, onContinue, savedWave, loading, note }: { onStart: () => void; onContinue: (wave: number) => void; savedWave: number | null; loading: boolean; note: string }) {
+/** Perk loadout picker: families in columns, locked perks show how many waves remain to unlock them. */
+function PerkPicker({ progress, onLoadout }: { progress: Progress; onLoadout: (ids: string[]) => void }) {
+  const picked = progress.loadout;
+  const toggle = (id: string) => {
+    if (picked.includes(id)) onLoadout(picked.filter((x) => x !== id));
+    else if (picked.length < MAX_LOADOUT) onLoadout([...picked, id]);
+  };
+  return (
+    <div className="mt-4 rounded-lg border border-white/15 bg-black/50 p-3 text-left">
+      <div className="mb-2 flex items-baseline justify-between text-[10px] font-semibold tracking-widest text-slate-300">
+        <span>PERKS · LOADOUT {picked.length}/{MAX_LOADOUT}</span>
+        <span className="font-normal normal-case tracking-normal text-slate-400">{progress.totalWaves} waves cleared in total</span>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-3">
+        {FAMILIES.map((f) => (
+          <div key={f.id}>
+            <div className="text-xs font-bold text-amber-200">{f.name}</div>
+            <div className="mb-1 text-[10px] leading-snug text-slate-400">{f.blurb}</div>
+            <div className="space-y-1">
+              {PERKS.filter((p) => p.family === f.id).map((p) => {
+                const ok = isUnlocked(p, progress.totalWaves);
+                const on = picked.includes(p.id);
+                return (
+                  <button
+                    key={p.id}
+                    disabled={!ok || (!on && picked.length >= MAX_LOADOUT)}
+                    onClick={() => toggle(p.id)}
+                    className={`w-full rounded border px-2 py-1 text-left text-[11px] ${
+                      on ? "border-emerald-300/70 bg-emerald-500/20 text-white" : ok ? "border-white/20 text-slate-200 hover:bg-white/10" : "border-white/10 text-slate-500"
+                    } disabled:cursor-not-allowed`}
+                  >
+                    <div className="font-semibold">
+                      {p.name} {!ok && <span className="font-normal">· {TIER_WAVES[p.tier] - progress.totalWaves} more waves</span>}
+                    </div>
+                    <div className="text-[10px] opacity-80">{p.desc}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Menu({
+  onStart,
+  onContinue,
+  savedWave,
+  loading,
+  note,
+  progress,
+  onLoadout,
+}: {
+  onStart: () => void;
+  onContinue: (wave: number) => void;
+  savedWave: number | null;
+  loading: boolean;
+  note: string;
+  progress: Progress;
+  onLoadout: (ids: string[]) => void;
+}) {
   return (
     <div className="absolute inset-0 z-30 flex items-center justify-center overflow-y-auto bg-gradient-to-b from-black/70 via-black/45 to-black/80 p-4 backdrop-blur-[2px]">
       <div className="my-auto w-full max-w-5xl">
@@ -166,6 +230,8 @@ function Menu({ onStart, onContinue, savedWave, loading, note }: { onStart: () =
           </div>
         </div>
 
+        <PerkPicker progress={progress} onLoadout={onLoadout} />
+
         <div className="mt-5 flex flex-col items-center gap-2">
           <button
             disabled={loading}
@@ -201,6 +267,9 @@ export default function App() {
     gameRef.current?.setMinimap(el);
   }, []);
   const gameRef = useRef<Game | null>(null);
+  const [progress, setProgress] = useState<Progress>(() => (typeof window === "undefined" ? EMPTY_PROGRESS : loadProgress()));
+  const progressRef = useRef(progress);
+  progressRef.current = progress;
   const [touch] = useState(() => isTouchDevice());
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [phase, setPhase] = useState<Phase>("menu");
@@ -227,6 +296,12 @@ export default function App() {
           onBark: (b) => setBarks((p) => [...p.slice(-5), { ...b, at: performance.now() }]),
           onToast: (t) => setToasts((p) => [...p.slice(-3), { ...t, at: performance.now() }]),
           onPhase: (p) => setPhase(p),
+          onWaveCleared: () =>
+            setProgress((cur) => {
+              const next = { ...cur, totalWaves: cur.totalWaves + 1 };
+              saveProgress(next);
+              return next;
+            }),
         },
         { canvas: canvasRef.current, overlay: overlayRef.current ?? undefined, minimap: miniEl.current ?? undefined }
       );
@@ -257,6 +332,8 @@ export default function App() {
     if (!g) return;
     setBarks([]);
     setToasts([]);
+    const pr = progressRef.current;
+    g.setLoadout(sanitizeLoadout(pr.loadout, pr.totalWaves), pr.totalWaves);
     g.start(fromWave ?? 1);
     if (fromWave === undefined && !tutorialDone()) {
       setTutStep(0);
@@ -565,7 +642,23 @@ export default function App() {
           touch={touch}
         />
       )}
-      {phase === "menu" && <Menu onStart={() => deploy()} onContinue={(w) => deploy(w)} savedWave={savedWave} loading={loading} note={note} />}
+      {phase === "menu" && (
+        <Menu
+          onStart={() => deploy()}
+          onContinue={(w) => deploy(w)}
+          savedWave={savedWave}
+          loading={loading}
+          note={note}
+          progress={progress}
+          onLoadout={(ids) =>
+            setProgress((cur) => {
+              const next = { ...cur, loadout: sanitizeLoadout(ids, cur.totalWaves) };
+              saveProgress(next);
+              return next;
+            })
+          }
+        />
+      )}
     </div>
   );
 }
