@@ -18,5 +18,7 @@
 - [~] **Ending cutscene:** resolve the story, reward the player for finishing, show the lasting impact of their actions, then credits or a sequel tease.
   - Done: epilogue cards built from the run (squad survival, nape cuts), a "Veteran of the Walls" badge kept in the browser, a sequel tease, and a scrolling credits roll (src/Ending.tsx).
   - Still to do: browser check of the animation, a fuller credits list.
-- [ ] **Music and sound effects:** excitement/drama cues, a different track per wave, tonal themes that reference the seasons of AOT episodes.
+- [~] **Music and sound effects:**
+  - Done: procedural score (src/game/music.ts). Every wave has its own key, mode, tempo and pattern (59 distinct themes across 60 waves); the four seasons set the palette (maria / breach / beast / chapter) and wave 60 has its own finale. Drums and the intensity rise as titans close in. Ducks on pause, stops on death or victory.
+  - Still to do: listen-test in a browser and tune the levels; more sound effects (titan footsteps by kind, Reiss steam, the spear throw and pin); a dedicated ending theme. excitement/drama cues, a different track per wave, tonal themes that reference the seasons of AOT episodes.
 - [ ] **Mobile support:** touch controls that are easy to play.

@@ -5,6 +5,8 @@ export class Sfx {
   private gasGain: GainNode | null = null;
   private noise: AudioBuffer | null = null;
   muted = false;
+  /** Called once the audio graph exists (the music layer attaches to it). */
+  onReady: ((ctx: AudioContext, out: GainNode) => void) | null = null;
 
   init() {
     if (typeof window === "undefined") return;
@@ -35,6 +37,7 @@ export class Sfx {
       this.gasGain.gain.value = 0;
       src.connect(bp).connect(this.gasGain).connect(this.master);
       src.start();
+      this.onReady?.(ctx, this.master);
     } catch {
       this.ctx = null;
     }

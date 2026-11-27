@@ -10,6 +10,7 @@ import { BotBrain, PERSONALITIES, makeBrains, formatBark, stateLabel } from "./b
 import type { BotKind } from "./bots";
 import type { Sim, RayHit, BarkKey } from "./types";
 import { waveSpec, FINAL_WAVE } from "./waves";
+import { Music } from "./music";
 import type { SpawnSpec } from "./waves";
 import { MARIA_R, ROSE_R, wallRingAt } from "./lore";
 
@@ -126,6 +127,7 @@ export class Game implements Sim {
   private pendSlash = false;
   private pendSwap = false;
   private pendSpear = false;
+  private music = new Music();
   private spearT = 0;
   private pendStruggle = false;
   private camYaw = 0;
@@ -179,6 +181,7 @@ export class Game implements Sim {
     private cb: GameCallbacks = {},
     opts: { canvas?: HTMLCanvasElement; overlay?: HTMLCanvasElement; minimap?: HTMLCanvasElement } = {}
   ) {
+    this.sfx.onReady = (ctx, out) => this.music.attach(ctx, out);
     this.world = new World(1337);
     this.fx = new FX();
     this.scene.add(this.world.group, this.fx.group);
@@ -419,10 +422,13 @@ export class Game implements Sim {
   private setPhase(p: Phase) {
     this.phase = p;
     if (this.canvas) this.canvas.style.cursor = p === "playing" ? "none" : "default";
+    this.music.duck(p !== "playing");
+    if (p === "dead" || p === "won") this.music.stop();
     this.cb.onPhase?.(p);
   }
 
   private resetRun() {
+    this.music.stop();
     for (const t of this.titans) this.scene.remove(t.model);
     this.titans = [];
     this.wave = 0;
@@ -474,6 +480,7 @@ export class Game implements Sim {
 
   // ------------------------------------------------------------------ waves
   private startWave(n: number) {
+    this.music.play(n);
     this.wave = n;
     this.waveState = "active";
     const spec = waveSpec(n);
@@ -903,6 +910,12 @@ export class Game implements Sim {
 
     // waves
     const alive = this.titans.filter((t) => t.alive).length;
+    {
+      // the score swells as the nearest Titan closes in
+      let near = Infinity;
+      for (const t of this.titans) if (t.alive) near = Math.min(near, Math.hypot(t.pos.x - this.player.pos.x, t.pos.z - this.player.pos.z));
+      this.music.setIntensity(1 - (near - 30) / 120);
+    }
     this.updateKick(dt);
     this.healing(dt);
     if (this.waveState === "active" && alive === 0 && this.wave > 0 && this.kick === null) {

@@ -142,5 +142,44 @@ check(titles({ ...base, napeKills: 2 }).includes("A few clean cuts"), "few nape 
 check(titles({ ...base, napeKills: 5 }).includes("Nobody left behind"), "a full squad is credited");
 check(titles({ ...base, napeKills: 5, squad: squadNone }).includes("The cost"), "a lost squad is acknowledged");
 check(impactCards({ ...base, napeKills: 5 }).length === 4, "four impact cards per ending");
+// 9. music: every wave has its own theme, and the seasons line up with the waves
+const { trackPlan } = await import("../src/game/music");
+const key = (n: number) => { const p = trackPlan(n); return `${p.rootHz}|${p.bpm}|${p.arp.join("")}|${p.bass.join("")}`; };
+let sameAsNext = 0;
+for (let n = 1; n < 60; n++) if (key(n) === key(n + 1)) sameAsNext++;
+check(sameAsNext === 0, `no two consecutive waves share a theme (${sameAsNext} clashes)`);
+const distinct = new Set(Array.from({ length: 60 }, (_, i) => key(i + 1))).size;
+check(distinct >= 45, `the 60 waves use many different themes (${distinct} distinct)`);
+check(trackPlan(1).season === "maria" && trackPlan(10).season === "breach" && trackPlan(20).season === "beast" && trackPlan(40).season === "chapter" && trackPlan(60).season === "finale", "seasons map to waves 1 / 10 / 20 / 40 / 60");
+check(Array.from({ length: 60 }, (_, i) => trackPlan(i + 1).bpm).every((b) => b >= 84 && b <= 150), "tempos stay in the 84–150 BPM range");
+check(trackPlan(0).wave === 1 && trackPlan(999).wave === 60, "track plans clamp out-of-range waves");
+// 10. music scheduler runs against a stub AudioContext (the real one needs a browser)
+{
+  const made = { osc: 0, buf: 0, gain: 0 };
+  const param = () => ({ value: 0, setValueAtTime() {}, exponentialRampToValueAtTime() {}, setTargetAtTime() {} });
+  const node = () => ({ connect() { return this; }, start() {}, stop() {}, frequency: param(), detune: param(), Q: param(), gain: param(), type: "", buffer: null, loop: false });
+  const ctxStub: any = {
+    currentTime: 0,
+    sampleRate: 8000,
+    createOscillator: () => (made.osc++, node()),
+    createGain: () => (made.gain++, node()),
+    createBiquadFilter: () => node(),
+    createBufferSource: () => node(),
+    createBuffer: (_c: number, len: number) => (made.buf++, { getChannelData: () => new Float32Array(len) }),
+    destination: {},
+  };
+  (globalThis as any).window = { setInterval: () => 1, clearInterval() {} };
+  const { Music } = await import("../src/game/music");
+  const m: any = new Music();
+  m.attach(ctxStub, {});
+  for (const w of [1, 10, 20, 60]) {
+    m.setIntensity(1);
+    m.play(w);
+    for (let k = 0; k < 40; k++) { ctxStub.currentTime += 0.05; m.pump(); }
+  }
+  check(made.osc > 40, `music schedules voices on the stub context (${made.osc} oscillators)`);
+  m.stop();
+  delete (globalThis as any).window;
+}
 console.log(fails ? `${fails} FAILED` : "ALL PASSED");
 process.exit(fails ? 1 : 0);

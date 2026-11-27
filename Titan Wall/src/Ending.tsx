@@ -81,8 +81,6 @@ const CREDITS = [
   "",
   "Thank you for holding the wall.",
   "",
-  "TO BE CONTINUED",
-  "Titan Wall II — beyond the walls",
 ];
 
 export function Ending({
@@ -141,7 +139,7 @@ export function Ending({
               </span>
             ))}
           </div>
-          <p className="mt-6 text-sm italic text-slate-300">Beyond the walls, something is waiting. Titan Wall II is coming.</p>
+          <p className="mt-6 text-sm italic text-slate-400">Beyond the walls, something is watching.</p>
           <div className="mt-6 flex justify-center gap-3" onClick={(e) => e.stopPropagation()}>
             <button onClick={onPlayAgain} className="rounded bg-amber-400 px-6 py-2 text-sm font-extrabold tracking-widest text-black hover:bg-amber-300">
               PLAY AGAIN
