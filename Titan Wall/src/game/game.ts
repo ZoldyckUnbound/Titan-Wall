@@ -356,6 +356,8 @@ export class Game implements Sim {
       if ((e as any).sourceCapabilities?.firesTouchEvents || this.touch.active) return;
       if (e.target !== canvas && e.target !== this.overlay) return;
       if (e.button === 0) {
+        // a click is a user gesture: if the mouse is not captured (e.g. after Esc), try to capture it again
+        if (!this.lockActive && !this.touch.active) this.requestLock();
         this.mouse[0] = true;
         this.pendSlash = true;
       } else if (e.button === 1) {
@@ -407,7 +409,9 @@ export class Game implements Sim {
       this.edgePan = true;
     }
     window.setTimeout(() => {
-      if (!this.lockActive && this.phase === "playing") this.edgePan = true;
+      if (this.lockActive || this.phase !== "playing") return;
+      this.edgePan = true;
+      this.toast("Mouse not captured — click the screen again to lock it", "info");
     }, 700);
   }
 

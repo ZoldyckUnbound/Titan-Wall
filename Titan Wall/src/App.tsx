@@ -579,7 +579,13 @@ export default function App() {
 
       {/* pause */}
       {phase === "paused" && tutStep === null && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div
+          className="absolute inset-0 z-20 flex cursor-pointer items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={(e) => {
+            // clicking the backdrop resumes too; the request is a user gesture, so it can capture the mouse again
+            if (e.target === e.currentTarget) resume();
+          }}
+        >
           <div className="rounded-xl border border-white/20 bg-slate-900/90 p-8 text-center">
             <div className="font-serif text-4xl font-black tracking-widest">PAUSED</div>
             <div className="mt-4 grid gap-1.5 text-left">
@@ -590,6 +596,7 @@ export default function App() {
                 </div>
               ))}
             </div>
+            <div className="mt-4 text-[11px] text-slate-400">Click anywhere or press RESUME to capture the mouse again.</div>
             <button onClick={resume} className="pointer-events-auto mt-6 rounded bg-emerald-500 px-8 py-2.5 font-extrabold tracking-widest text-black hover:bg-emerald-400">
               RESUME
             </button>
