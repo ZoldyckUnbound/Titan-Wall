@@ -391,11 +391,12 @@ export class Game implements Sim {
   }
 
   // ------------------------------------------------------------------ lifecycle
-  start() {
+  /** Start a fresh run. `fromWave` lets a player retry the level they died on or resume a saved run. */
+  start(fromWave = 1) {
     this.sfx.init();
     this.resetRun();
     this.setPhase("playing");
-    this.startWave(1);
+    this.startWave(Math.max(1, Math.min(FINAL_WAVE, Math.floor(fromWave) || 1)));
   }
   restart() {
     this.start();

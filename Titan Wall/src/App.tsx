@@ -42,7 +42,72 @@ const CONTROLS: [React.ReactNode, string][] = [
   [<Key>M</Key>, "Mute / unmute sound"],
 ];
 
-function Menu({ onStart, loading, note }: { onStart: () => void; loading: boolean; note: string }) {
+const SAVE_KEY = "titanwall.save.v1";
+const TUTORIAL_KEY = "titanwall.tutorial.v1";
+
+function readSave(): number | null {
+  try {
+    const v = Number(localStorage.getItem(SAVE_KEY));
+    return Number.isFinite(v) && v >= 1 ? Math.floor(v) : null;
+  } catch {
+    return null;
+  }
+}
+function writeSave(wave: number | null) {
+  try {
+    if (wave == null) localStorage.removeItem(SAVE_KEY);
+    else localStorage.setItem(SAVE_KEY, String(wave));
+  } catch {
+    /* storage unavailable (private mode): the save just doesn't persist */
+  }
+}
+const tutorialDone = () => {
+  try {
+    return localStorage.getItem(TUTORIAL_KEY) === "1";
+  } catch {
+    return true;
+  }
+};
+const markTutorialDone = () => {
+  try {
+    localStorage.setItem(TUTORIAL_KEY, "1");
+  } catch {
+    /* ignore */
+  }
+};
+
+const TUTORIAL: { title: string; body: string }[] = [
+  { title: "Move and look", body: "W A S D runs along the ground. Move the mouse to look around. Arrow keys work too." },
+  { title: "Grapple", body: "Click left or right mouse to fire a hook at a rooftop, wall or titan. The rope pulls you toward the anchor. Hooks only catch solid things, not open ground." },
+  { title: "Boost", body: "Hold SPACE to fire your gas. It pushes you up and forward, even when you look down. Boosting burns gas; swinging and reeling are free." },
+  { title: "Reel in", body: "Hold SHIFT to shorten the rope and swing in tighter. It costs no gas." },
+  { title: "Landing", body: "Touch down gently or boost into the landing. A hard, flat crash into a wall or street hurts." },
+  { title: "Cut the nape", body: "Reach a titan's glowing red nape at 12 m/s or faster and press F (or Q) to slash. Blades dull as you cut; R swaps in a fresh set." },
+  { title: "Depots and squad", body: "Depots restock gas and blades and heal you. A depot goes offline when a titan is too close. Squad mates have one life each, so keep them alive." },
+];
+
+function Tutorial({ step, onNext, onSkip }: { step: number; onNext: () => void; onSkip: () => void }) {
+  const t = TUTORIAL[step];
+  return (
+    <div className="absolute inset-x-0 bottom-6 z-30 flex justify-center px-4">
+      <div className="w-[32rem] max-w-full rounded-xl border border-amber-200/30 bg-black/85 p-5 shadow-2xl">
+        <div className="flex items-baseline justify-between">
+          <div className="text-[10px] tracking-[0.35em] text-amber-200/80">FIRST DEPLOYMENT · {step + 1} / {TUTORIAL.length}</div>
+          <button onClick={onSkip} className="text-xs text-slate-400 hover:text-white">Skip tutorial</button>
+        </div>
+        <div className="mt-2 font-serif text-2xl font-bold text-white">{t.title}</div>
+        <p className="mt-1.5 text-sm leading-relaxed text-slate-200">{t.body}</p>
+        <div className="mt-4 flex justify-end">
+          <button onClick={onNext} className="rounded bg-emerald-500 px-6 py-2 text-sm font-extrabold tracking-widest text-black hover:bg-emerald-400">
+            {step + 1 < TUTORIAL.length ? "NEXT" : "DEPLOY"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Menu({ onStart, onContinue, savedWave, loading, note }: { onStart: () => void; onContinue: (wave: number) => void; savedWave: number | null; loading: boolean; note: string }) {
   return (
     <div className="absolute inset-0 z-30 flex items-center justify-center overflow-y-auto bg-gradient-to-b from-black/70 via-black/45 to-black/80 p-4 backdrop-blur-[2px]">
       <div className="my-auto w-full max-w-5xl">
@@ -99,11 +164,19 @@ function Menu({ onStart, loading, note }: { onStart: () => void; loading: boolea
         <div className="mt-5 flex flex-col items-center gap-2">
           <button
             disabled={loading}
-            onClick={onStart}
+            onClick={() => onStart()}
             className="rounded-md bg-emerald-500 px-12 py-3.5 text-lg font-extrabold tracking-[0.25em] text-black shadow-[0_0_40px_rgba(52,211,153,0.45)] transition hover:scale-105 hover:bg-emerald-400 disabled:opacity-50"
           >
             {loading ? "LOADING..." : "DEPLOY"}
           </button>
+          {savedWave && !loading && (
+            <button
+              onClick={() => onContinue(savedWave)}
+              className="rounded-md border border-amber-300/50 bg-black/40 px-8 py-2 text-sm font-bold tracking-widest text-amber-200 hover:bg-white/10"
+            >
+              CONTINUE FROM WAVE {savedWave}
+            </button>
+          )}
           <div className="text-[11px] text-slate-400">Desktop · mouse + keyboard · click to capture the mouse (Esc to pause)</div>
           {note && <div className="text-[11px] text-amber-200/70">{note}</div>}
         </div>
@@ -127,6 +200,8 @@ export default function App() {
   const [toasts, setToasts] = useState<TimedToast[]>([]);
   const [loading, setLoading] = useState(true);
   const [note, setNote] = useState("");
+  const [tutStep, setTutStep] = useState<number | null>(null);
+  const [savedWave, setSavedWave] = useState<number | null>(readSave);
   const [, force] = useState(0);
 
   useEffect(() => {
@@ -168,14 +243,30 @@ export default function App() {
     };
   }, []);
 
-  const deploy = useCallback(() => {
+  /** Start a run. `fromWave` retries a level or resumes a saved one; the tutorial runs once, on the first deploy. */
+  const deploy = useCallback((fromWave?: number) => {
     const g = gameRef.current;
     if (!g) return;
     setBarks([]);
     setToasts([]);
-    g.start();
+    g.start(fromWave ?? 1);
+    if (fromWave === undefined && !tutorialDone()) {
+      setTutStep(0);
+      g.pause(); // the tutorial holds the game until the player dismisses it
+      return;
+    }
     g.requestLock();
   }, []);
+  const finishTutorial = useCallback(() => {
+    markTutorialDone();
+    setTutStep(null);
+    gameRef.current?.resume(true);
+  }, []);
+  const saveRun = useCallback((wave: number) => {
+    const next = Math.max(wave, savedWave ?? 0);
+    writeSave(next);
+    setSavedWave(next);
+  }, [savedWave]);
   const resume = useCallback(() => gameRef.current?.resume(), []);
 
   const now = performance.now();
@@ -381,7 +472,7 @@ export default function App() {
       )}
 
       {/* pause */}
-      {phase === "paused" && (
+      {phase === "paused" && tutStep === null && (
         <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="rounded-xl border border-white/20 bg-slate-900/90 p-8 text-center">
             <div className="font-serif text-4xl font-black tracking-widest">PAUSED</div>
@@ -418,9 +509,21 @@ export default function App() {
                 </div>
               ))}
             </div>
-            <button onClick={deploy} className="mt-6 rounded bg-emerald-500 px-10 py-3 font-extrabold tracking-widest text-black hover:bg-emerald-400">
-              REDEPLOY
-            </button>
+            <div className="mt-6 flex flex-col gap-2">
+              <button onClick={() => deploy(s.wave)} className="rounded bg-emerald-500 px-10 py-3 font-extrabold tracking-widest text-black hover:bg-emerald-400">
+                RETRY WAVE {s.wave}
+              </button>
+              <button
+                disabled={savedWave !== null && savedWave >= s.wave}
+                onClick={() => saveRun(s.wave)}
+                className="rounded border border-amber-300/40 px-10 py-2 text-sm font-bold tracking-widest text-amber-200 hover:bg-white/10 disabled:opacity-50"
+              >
+                {savedWave !== null && savedWave >= s.wave ? `SAVED — WAVE ${savedWave}` : `SAVE RUN (WAVE ${s.wave})`}
+              </button>
+              <button onClick={() => deploy(1)} className="rounded px-10 py-2 text-xs tracking-widest text-slate-300 hover:text-white">
+                RESTART FROM WAVE 1
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -443,14 +546,21 @@ export default function App() {
                 </div>
               ))}
             </div>
-            <button onClick={deploy} className="mt-6 rounded bg-amber-400 px-10 py-3 font-extrabold tracking-widest text-black hover:bg-amber-300">
+            <button onClick={() => deploy()} className="mt-6 rounded bg-amber-400 px-10 py-3 font-extrabold tracking-widest text-black hover:bg-amber-300">
               PLAY AGAIN
             </button>
           </div>
         </div>
       )}
 
-      {phase === "menu" && <Menu onStart={deploy} loading={loading} note={note} />}
+      {phase !== "menu" && phase !== "dead" && tutStep !== null && (
+        <Tutorial
+          step={tutStep}
+          onNext={() => (tutStep + 1 < TUTORIAL.length ? setTutStep(tutStep + 1) : finishTutorial())}
+          onSkip={finishTutorial}
+        />
+      )}
+      {phase === "menu" && <Menu onStart={() => deploy()} onContinue={(w) => deploy(w)} savedWave={savedWave} loading={loading} note={note} />}
     </div>
   );
 }

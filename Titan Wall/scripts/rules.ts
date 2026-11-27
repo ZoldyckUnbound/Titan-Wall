@@ -66,5 +66,13 @@ t2.alive = false;
 check(t1.canGrab(sc, g), "grab allowed when the neighbour is gone");
 sc.grabImmune = 3;
 check(!t1.canGrab(sc, g), "no grab during post-release immunity");
+// 5. retry / resume: start(fromWave) begins at that wave and clamps the input
+const g2 = new Game({ onToast: () => {} });
+g2.start(10);
+check(g2.wave === 10 && g2.titans.some((t) => t.kind === "colossal"), "start(10) resumes at wave 10 with the colossal");
+g2.start(0);
+check(g2.wave === 1, "start(0) clamps to wave 1");
+g2.start(999);
+check(g2.wave === 60, "start(999) clamps to the final wave 60");
 console.log(fails ? `${fails} FAILED` : "ALL PASSED");
 process.exit(fails ? 1 : 0);
