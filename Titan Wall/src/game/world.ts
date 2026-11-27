@@ -325,6 +325,7 @@ export class World {
     this.buildDepots();
     this.chunks = new BuildingChunks(this.layout.buildings, 160, HALF);
     for (const s of this.layout.buildings) this.addBuildingBox(s);
+    this.buildProps(); // after the building boxes, so props keep clear of every house
     this.group.add(this.chunks.group);
     this.chunks.buildAll();
     this.nav = new NavGrid(HALF, 20);
@@ -823,6 +824,84 @@ export class World {
       this.fountains.push({ x: f.x, z: f.z, r: f.r });
       const b = makeBox("fountain", f.x, f.z, f.r * 0.92, f.r * 0.92, 0, 1.3);
       this.insert(b);
+    }
+  }
+
+  /**
+   * Village dressing: wells, haystacks and handcarts on the edges of towns and villages. These are
+   * decoration only (no collision, not in the nav grid), placed where no building box is.
+   */
+  private buildProps() {
+    const rng = new RNG(4242);
+    const wood = new THREE.MeshStandardMaterial({ color: 0x7a5a3a, roughness: 0.95 });
+    const stoneM = new THREE.MeshStandardMaterial({ color: 0x9b968a, roughness: 0.9 });
+    const hay = new THREE.MeshStandardMaterial({ color: 0xc9a85a, roughness: 1 });
+    const roofM = new THREE.MeshStandardMaterial({ color: 0x5c4630, roughness: 0.9 });
+    const iron = new THREE.MeshStandardMaterial({ color: 0x3a3a3a, roughness: 0.6, metalness: 0.4 });
+    const clear = (x: number, z: number) => {
+      if (Math.hypot(x, z) > MARIA_R - 40) return false;
+      for (const b of this.boxes) {
+        if (x > b.minX - 3 && x < b.maxX + 3 && z > b.minZ - 3 && z < b.maxZ + 3) return false;
+      }
+      return true;
+    };
+    const place = (d: (typeof DISTRICTS)[number], make: (g: THREE.Group) => void) => {
+      for (let tries = 0; tries < 80; tries++) {
+        const a = rng.next() * Math.PI * 2;
+        const rr = d.r * (0.4 + rng.next() * 0.7);
+        const x = d.c.x + Math.cos(a) * rr;
+        const z = d.c.z + Math.sin(a) * rr;
+        if (!clear(x, z)) continue;
+        const g = new THREE.Group();
+        g.position.set(x, 0, z);
+        g.rotation.y = rng.next() * Math.PI * 2;
+        make(g);
+        this.group.add(g);
+        return true;
+      }
+      return false;
+    };
+    const add = (g: THREE.Group, geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number) => {
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(x, y, z);
+      m.castShadow = true;
+      m.receiveShadow = true;
+      g.add(m);
+    };
+    for (const d of DISTRICTS) {
+      if (d.kind !== "town" && d.kind !== "village") continue;
+      const n = Math.round(d.r / 60);
+      for (let i = 0; i < n; i++) {
+        const kind = rng.next();
+        if (kind < 0.34) {
+          // village well: stone ring, two posts and a small roof
+          place(d, (g) => {
+            add(g, new THREE.CylinderGeometry(1.1, 1.2, 1.0, 14), stoneM, 0, 0.5, 0);
+            add(g, new THREE.BoxGeometry(0.18, 2.2, 0.18), wood, -0.95, 1.6, 0);
+            add(g, new THREE.BoxGeometry(0.18, 2.2, 0.18), wood, 0.95, 1.6, 0);
+            add(g, new THREE.BoxGeometry(2.4, 0.14, 1.6), roofM, 0, 2.8, 0);
+            add(g, new THREE.CylinderGeometry(0.12, 0.12, 1.9, 6), iron, 0, 1.6, 0);
+          });
+        } else if (kind < 0.67) {
+          // haystack: a squat cone on a wooden base
+          place(d, (g) => {
+            add(g, new THREE.CylinderGeometry(0.2, 2.1, 2.4, 10), hay, 0, 1.4, 0);
+            add(g, new THREE.CylinderGeometry(2.2, 2.2, 0.2, 10), wood, 0, 0.1, 0);
+          });
+        } else {
+          // handcart on two wheels, tilted to one side
+          place(d, (g) => {
+            add(g, new THREE.BoxGeometry(1.9, 0.18, 2.6), wood, 0, 0.9, 0);
+            add(g, new THREE.BoxGeometry(1.9, 0.6, 0.12), wood, 0, 1.2, 1.3);
+            add(g, new THREE.BoxGeometry(1.9, 0.6, 0.12), wood, 0, 1.2, -1.3);
+            const w1 = new THREE.CylinderGeometry(0.6, 0.6, 0.14, 12);
+            w1.rotateZ(Math.PI / 2);
+            add(g, w1, wood, 1.05, 0.6, 0);
+            add(g, w1, wood, -1.05, 0.6, 0);
+            add(g, new THREE.BoxGeometry(0.12, 0.12, 4.2), wood, 0, 0.8, 3.4);
+          });
+        }
+      }
     }
   }
 
