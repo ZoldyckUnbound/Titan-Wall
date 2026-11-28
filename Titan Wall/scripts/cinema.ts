@@ -79,6 +79,15 @@ const npc = new Scout({ id: "n", name: "N", isPlayer: false, palette: { cloak: 0
 npc.reset(new THREE.Vector3(0, 1, 0));
 (npc as any).fireHook(0, aim, stubSim);
 check((npc as any).hooks[0].missed === true, "teammates get no assist (the player only)");
+// the wider assist: 20 degrees off still catches, 40 degrees off still misses (it is a nudge, not an aimbot)
+const p20 = new Scout({ id: "t20", name: "T", isPlayer: true, palette: { cloak: 0, hair: 0, accent: 0 }, maxHp: 100, killSpeed: 12, dmgMult: 1 } as any);
+p20.reset(new THREE.Vector3(0, 1, 0));
+(p20 as any).fireHook(0, new THREE.Vector3(Math.sin(0.35), 0, Math.cos(0.35)), stubSim);
+check((p20 as any).hooks[0].missed === false, "a hook aimed 20 degrees off the wall catches it (wider assist)");
+const p40 = new Scout({ id: "t40", name: "T", isPlayer: true, palette: { cloak: 0, hair: 0, accent: 0 }, maxHp: 100, killSpeed: 12, dmgMult: 1 } as any);
+p40.reset(new THREE.Vector3(0, 1, 0));
+(p40 as any).fireHook(0, new THREE.Vector3(Math.sin(0.7), 0, Math.cos(0.7)), stubSim);
+check((p40 as any).hooks[0].missed === true, "a hook aimed 40 degrees off the wall still misses (assist is bounded)");
 
 console.log(fails ? `${fails} FAILED` : "ALL PASSED");
 process.exit(fails ? 1 : 0);

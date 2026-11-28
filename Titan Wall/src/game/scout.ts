@@ -99,9 +99,10 @@ const _f = new V3();
 const _r = new V3();
 const _ahead = new V3();
 
-/** Hook-assist offsets (yaw, pitch) in radians, tried in order: about 8 and 16 degrees around the aim. */
+/** Hook-assist offsets (yaw, pitch) in radians, tried in order: 8, 16 and 24 degrees around the aim. */
 const ASSIST_OFFSETS: [number, number][] = [
   [0.14, 0], [-0.14, 0], [0, 0.14], [0, -0.14], [0.28, 0], [-0.28, 0], [0, 0.28], [0, -0.28],
+  [0.42, 0], [-0.42, 0], [0, 0.42], [0, -0.42],
 ];
 
 export class Scout {

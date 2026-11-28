@@ -6,6 +6,7 @@ import type { Progress } from "./game/perks";
 import { Game } from "./game/game";
 import type { BarkMsg, Phase, Snapshot, ToastMsg } from "./game/game";
 import { loadAssets } from "./game/assets";
+import { DISTRICTS } from "./game/lore";
 
 type TimedBark = BarkMsg & { at: number };
 type TimedToast = ToastMsg & { at: number };
@@ -382,6 +383,33 @@ function Menu({
               <li>A title card before every wave shows what is coming.</li>
               <li>Fifty more Survey Corps recruits patrol Wall Maria.</li>
               <li>Boost burns far less gas, and the hook assist snaps near-misses onto a wall.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <div className="rounded-lg border border-white/15 bg-black/50 p-4 text-xs leading-relaxed text-slate-300">
+            <div className="text-[10px] font-bold tracking-[0.3em] text-amber-200/90">SETTLEMENTS</div>
+            <p className="mt-1">
+              {DISTRICTS.length} districts across the three walls. Every town and village has timber gate posts on its main roads, and the villages are denser than before.
+            </p>
+            <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-0.5">
+              {DISTRICTS.map((d) => (
+                <div key={d.id} className="flex justify-between text-[11px]">
+                  <span className="text-white">{d.name}</span>
+                  <span className="text-slate-400">{d.kind}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="rounded-lg border border-white/15 bg-black/50 p-4 text-xs leading-relaxed text-slate-300">
+            <div className="text-[10px] font-bold tracking-[0.3em] text-amber-200/90">GEAR, HORSES AND SUPPLY</div>
+            <ul className="mt-1 list-disc space-y-1 pl-4">
+              <li><b className="text-white">Horses</b> come in supply, up to two at a time. Press <b className="text-white">H</b> to mount: about twice the ground pace, with no hooks and no gas while riding.</li>
+              <li><b className="text-white">Supply depots</b> restock gas, blades and horses. They shut down when a titan is too close.</li>
+              <li><b className="text-white">Hook assist</b> nudges a near-miss of about 24° onto the nearest wall or roof.</li>
+              <li><b className="text-white">Healing</b> is slow and only starts above 75 HP.</li>
+              <li><b className="text-white">Retry</b> from the level you fell on, or save your best run to come back to later.</li>
             </ul>
           </div>
         </div>

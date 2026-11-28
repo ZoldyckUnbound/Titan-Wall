@@ -204,8 +204,22 @@ export function generateLayout(seed = 1337): Layout {
       }
     }
 
-    // scatter the rest
-    const target = d.density;
+    // village gates: a timber gate pair on each road axis at the edge of the district (towns and villages only)
+    if (d.kind === "town" || d.kind === "village") {
+      const gx = d.r * 0.92;
+      for (const [ox, oz] of [[gx, 0], [-gx, 0], [0, gx], [0, -gx]]) {
+        const across = ox !== 0 ? [0, 1] : [1, 0];
+        for (const sgn of [-1, 1]) {
+          const px = fx + ox + across[0] * sgn * (ROAD_HALF + 2.2);
+          const pz = fz + oz + across[1] * sgn * (ROAD_HALF + 2.2);
+          mk({ district: d.id, shape: "tower", style: "timber", roof: "gable", x: px, z: pz, yaw: 0, w: 2.6, d: 2.6, floors: 4, destructible: false, hp: 99999, chimney: false });
+          occ.add(px - 2, px + 2, pz - 2, pz + 2);
+        }
+      }
+    }
+
+    // scatter the rest. Villages get about a third more houses than their base density.
+    const target = Math.round(d.density * (d.kind === "village" ? 1.35 : 1));
     let placed = 0;
     const clear = plazaClear(d);
     for (let attempt = 0; attempt < target * 14 && placed < target; attempt++) {

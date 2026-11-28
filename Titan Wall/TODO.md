@@ -32,3 +32,11 @@
   - Done: on-screen move stick, look drag, BOOST, HOOK L/R (hold keeps the rope), SLASH, SPEAR, RELOAD, GRAB, PAUSE (src/Touch.tsx). Touch tutorial copy, minimap hidden on phones, HUD bars clear of the buttons. Checked in headless Chromium at 844×390 (no console errors) and in scripts/touch.ts.
   - Portrait phones get a "turn your phone sideways" overlay during a run (CSS only; checked in headless Chromium at 390×844).
   - Still to do: check on a real phone; sensitivity settings; very narrow landscape screens will still crowd the HUD.
+- [~] **Latest batch: controls, villages, home page, recruit launches.**
+  - Done: hook assist widened from 16° to 24° (ASSIST_OFFSETS in scout.ts; player only). scripts/cinema.ts checks 12° and 20° catch, 40° still misses.
+  - Done: every town and village has 8 timber gate posts on its four road axes (city.ts). Village density raised by 35% (about 190–290 buildings per village, measured at seed 1337). Layout-only check; not yet looked at in a browser.
+  - Done: home page adds a Settlements panel (built from DISTRICTS) and a Gear, Horses and Supply panel. Every claim was checked against the code (depot lock, HEAL_FLOOR 75, horse restock, retry/save).
+  - Blocked: browser screenshot of the home page. Headless Chromium fails with a missing libnss3 in this sandbox, so the phone and desktop checks from earlier sessions could not be rerun.
+  - Open: recruit velocity spikes (dv 13–35 m/s, hooks idle, no titan near). A cap that made teammates drop hooks above 28 m/s was tried and did not reduce them (capped runs 22–190, uncapped 57–180), so it was reverted. The cause is not known; next step is a per-frame force trace (collision, hook pull, boost, ground snap).
+  - Open: "research" in the latest request is not yet defined. Confirm what the user wants researched before building it.
+  - Open: ODM ease beyond the wider assist (for example, air control while hooked, and a gentler pendulum) is still to be tuned by playtest.
