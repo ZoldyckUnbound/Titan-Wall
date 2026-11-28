@@ -111,5 +111,31 @@ function attach(g: Game, at: [number, number, number], anchor: [number, number, 
   check(g.player.gas >= gas0 - 0.01, "letting go burns no gas");
 }
 
+// 5. rope trim: W pays the rope in and S pays it out while hooked, and neither burns gas
+{
+  const g = fresh();
+  attach(g, [0, 60, 0], [0, 140, 0]);
+  const r0 = g.player.hooks[0].ropeLen;
+  const gas0 = g.player.gas;
+  for (let i = 0; i < 30; i++) { g.touch.hold[0] = true; (g as any).touch.my = 1; g.update(dt); }
+  const r1 = g.player.hooks[0].ropeLen;
+  check(r1 < r0 - 1.5, `W pays the rope in (${r0.toFixed(1)} m → ${r1.toFixed(1)} m)`);
+  check(g.player.gas >= gas0 - 0.01, "W on a hook burns no gas");
+
+  const g2 = fresh();
+  attach(g2, [0, 60, 0], [0, 140, 0]);
+  const q0 = g2.player.hooks[0].ropeLen;
+  for (let i = 0; i < 30; i++) { g2.touch.hold[0] = true; (g2 as any).touch.my = -1; g2.update(dt); }
+  const q1 = g2.player.hooks[0].ropeLen;
+  check(q1 > q0 + 1.5, `S pays the rope out (${q0.toFixed(1)} m → ${q1.toFixed(1)} m)`);
+  check(q1 <= 230.5, "paying out stops at the hook range");
+
+  const g3 = fresh();
+  attach(g3, [0, 60, 0], [0, 140, 0]);
+  const t0 = g3.player.hooks[0].ropeLen;
+  for (let i = 0; i < 30; i++) { g3.touch.hold[0] = true; g3.update(dt); }
+  check(Math.abs(g3.player.hooks[0].ropeLen - t0) < 0.01, "no W or S leaves the rope alone");
+}
+
 console.log(fails === 0 ? "ALL PASSED" : `${fails} FAILED`);
 if (fails) process.exitCode = 1;

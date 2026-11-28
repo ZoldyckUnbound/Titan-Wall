@@ -40,3 +40,9 @@
   - Open: recruit velocity spikes (dv 13–35 m/s, hooks idle, no titan near). A cap that made teammates drop hooks above 28 m/s was tried and did not reduce them (capped runs 22–190, uncapped 57–180), so it was reverted. The cause is not known; next step is a per-frame force trace (collision, hook pull, boost, ground snap).
   - Open: "research" in the latest request is not yet defined. Confirm what the user wants researched before building it.
   - Open: ODM ease beyond the wider assist (for example, air control while hooked, and a gentler pendulum) is still to be tuned by playtest.
+- [x] **Research pass (map and ODM ease).**
+  - Map: wall radii of 250 km (Sina), 380 km (Rose) and 480 km (Maria) are the commonly cited figures, which is 2500, 3800 and 4800 m at 1:100,000. lore.ts already uses them. Ring gaps are about 100 km (Maria to Rose) and 130 km (Rose to Sina). Sources: reddit r/attackontitan district-size thread, and the r/ShingekiNoKyojin wall-area thread.
+  - ODM in other AOT games: AOT Revolution (Roblox) guides list hook assist, nape assist, hook detach, and W/S to steer in the air while hooked, which sets height relative to the titan. Sources: attackontitanrevolutionroblox.wiki beginner guide, and gamerant's "How to Kill Titans in Attack on Titan Revolution".
+  - Done from this: W on a hook reels the rope in (7 m/s) and S pays it out (6 m/s), player only, no gas. scripts/aot.ts checks both, and that the rope cannot pass the hook range. Listed on the controls screen and the home page.
+  - Already in the game: hook assist (24°), a generous nape reach (3 m plus the nape radius), and hook release that keeps momentum.
+  - Not done: a nape-assist option in settings, and a backflip or side-flip dodge. Both are in the guides; neither is required by the request.

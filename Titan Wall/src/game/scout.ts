@@ -26,6 +26,8 @@ const BOOST_ACC = 30;
 const BOOST_GAS = 1.2; // % per second (was 10: a full tank now lasts about a minute of hard boosting)
 const REEL_ACC = 22;
 const REEL_SPEED = 16;
+const TRIM_IN = 7; // m/s the rope shortens when W is held on a hook (player only)
+const TRIM_OUT = 6; // m/s the rope pays out when S is held on a hook (player only)
 const RUN_SPEED = 5.8;
 /** Ground pace multiplier while riding a horse. */
 export const RIDE_SPEED_MULT = 2.1;
@@ -50,6 +52,7 @@ export interface ScoutControl {
   boost: boolean; // gas boost (Space)
   boostDir: THREE.Vector3; // boost direction when no hook is attached
   reel: boolean; // rope reel-in
+  trim: number; // player rope trim while hooked: +1 pays the rope in (W), -1 pays it out (S); no gas
   fire: [THREE.Vector3 | null, THREE.Vector3 | null]; // one-shot hook launch directions
   hold: [boolean, boolean]; // keep hook attached while true
   slash: boolean; // one-shot
@@ -61,6 +64,7 @@ export const newControl = (): ScoutControl => ({
   boost: false,
   boostDir: new V3(0, 0, 1),
   reel: false,
+  trim: 0,
   fire: [null, null],
   hold: [false, false],
   slash: false,
@@ -71,6 +75,7 @@ export function clearControl(c: ScoutControl) {
   c.move.set(0, 0, 0);
   c.boost = false;
   c.reel = false;
+  c.trim = 0;
   c.fire[0] = c.fire[1] = null;
   c.hold[0] = c.hold[1] = false;
   c.slash = false;
@@ -430,6 +435,14 @@ export class Scout {
         h.ropeLen = Math.max(2.5, Math.min(h.ropeLen, dist) - REEL_SPEED * dt);
       }
     }
+    // ---- rope trim (player): W and S change height on a hook like a rope you can pay in or out, no gas
+    if (this.isPlayer && ctrl.trim !== 0 && !ctrl.reel && !stunned) {
+      for (const h of this.hooks) {
+        if (h.state !== "attached") continue;
+        if (ctrl.trim > 0) h.ropeLen = Math.max(2.5, h.ropeLen - TRIM_IN * dt * ctrl.trim);
+        else h.ropeLen = Math.min(HOOK_RANGE, h.ropeLen - TRIM_OUT * dt * ctrl.trim);
+      }
+    }
     // ---- air control (weak: the body is on a cable, not on legs)
     if (!this.grounded && hasMove) _acc.addScaledVector(mv, nAtt > 0 ? 5 : 3);
 
@@ -452,6 +465,7 @@ export class Scout {
     }
 
     // ---- integrate in sub-steps (collisions need small steps at ODM speeds)
+    const payingOut = this.isPlayer && !stunned && !ctrl.reel && ctrl.trim < 0; // S lets the rope run out
     const steps = Math.min(6, Math.max(1, Math.ceil((dt * Math.max(10, this.speed)) / 0.6)));
     const h = dt / steps;
     let maxImpact = 0;
@@ -468,7 +482,7 @@ export class Scout {
           this.pos.addScaledVector(ta, d - hk.ropeLen);
           const vr = this.vel.dot(ta);
           if (vr < 0) this.vel.addScaledVector(ta, -vr);
-        } else if (d < hk.ropeLen) hk.ropeLen = Math.max(2.5, d);
+        } else if (d < hk.ropeLen && !payingOut) hk.ropeLen = Math.max(2.5, d);
       }
       sim.world.resolveSphere(this.pos, this.vel, SCOUT_R, this.contact);
       if (this.contact.impact > maxImpact) {

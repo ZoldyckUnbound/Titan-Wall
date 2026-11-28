@@ -44,6 +44,7 @@ const CONTROLS: [React.ReactNode, string][] = [
   [<Key>R</Key>, "Swap dull blades (works mid-air)"],
   [<Key>F</Key>, "Throw a thunder spear along your aim (pins a Titan)"],
   [<><Key>W</Key><Key>A</Key><Key>S</Key><Key>D</Key></>, "Run / steer in the air"],
+  [<><Key>W</Key><Key>S</Key></>, "On a hook: W reels you up, S lets the rope out (no gas)"],
   [<Key>MOUSE</Key>, "Look (arrow keys also work)"],
   [<Key wide>TAB</Key>, "Open the map: districts, depots, teammates and titans"],
   [<Key>H</Key>, "Mount a horse from your supply (H again to dismount)"],
@@ -407,7 +408,7 @@ function Menu({
             <ul className="mt-1 list-disc space-y-1 pl-4">
               <li><b className="text-white">Horses</b> come in supply, up to two at a time. Press <b className="text-white">H</b> to mount: about twice the ground pace, with no hooks and no gas while riding.</li>
               <li><b className="text-white">Supply depots</b> restock gas, blades and horses. They shut down when a titan is too close.</li>
-              <li><b className="text-white">Hook assist</b> nudges a near-miss of about 24° onto the nearest wall or roof.</li>
+              <li><b className="text-white">Hook assist</b> nudges a near-miss of about 24° onto the nearest wall or roof. On a hook, <b className="text-white">W</b> and <b className="text-white">S</b> raise or lower you.</li>
               <li><b className="text-white">Healing</b> is slow and only starts above 75 HP.</li>
               <li><b className="text-white">Retry</b> from the level you fell on, or save your best run to come back to later.</li>
             </ul>

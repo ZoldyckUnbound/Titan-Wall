@@ -935,6 +935,7 @@ export class Game implements Sim {
     if (c.move.lengthSq() > 1) c.move.normalize();
     c.boost = k.has("Space") || tc.boost;
     c.reel = k.has("ShiftLeft") || k.has("ShiftRight");
+    c.trim = fw;
     const cp = Math.cos(this.camPitch);
     c.boostDir.set(Math.sin(this.camYaw) * cp, Math.sin(this.camPitch), Math.cos(this.camYaw) * cp);
     c.hold[0] = this.keys.has("KeyQ") || tc.hold[0];
