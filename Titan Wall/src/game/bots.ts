@@ -3,7 +3,7 @@ import { Scout, newControl, clearControl } from "./scout";
 import type { ScoutControl } from "./scout";
 import type { Sim, BarkKey } from "./types";
 import type { Titan } from "./titan";
-import { MAP_R } from "./lore";
+import { MAP_R, MARIA_R } from "./lore";
 
 export type BotKind = "veteran" | "hothead" | "rookie" | "lancer" | "sentinel";
 export type BotState =
@@ -336,6 +336,8 @@ export class BotBrain {
   private repathT = 0;
   private hookT: [number, number] = [0, 0];
   private chooseT = Math.random();
+  /** Seconds spent outside Wall Maria with no way back (no gas, no depot in reach). */
+  private strandT = 0;
   private panicT = 0;
   private hesT = 0;
   private flankSide = Math.random() < 0.5 ? -1 : 1;
@@ -667,8 +669,17 @@ export class BotBrain {
     if (this.chooseT <= 0) {
       this.chooseT = 0.8 + Math.random() * 0.4;
       const t = this.chooseTarget(sim);
-      if (t) this.engage(sim, t);
+      // low on fuel, a bot is less likely to go looking for a far titan; it prefers to stay near the squad and depots
+      if (t && this.exploreOK(t)) this.engage(sim, t);
     }
+  }
+
+  /** Under 70% gas, a far titan is a worse bet: the chance to skip it grows as the tank empties (up to 80% at empty). */
+  private exploreOK(t: Titan): boolean {
+    const s = this.scout;
+    if (s.gas >= 70) return true;
+    if (Math.hypot(t.pos.x - s.pos.x, t.pos.z - s.pos.z) < 80) return true;
+    return Math.random() > 0.8 * ((70 - s.gas) / 70);
   }
 
   private engage(sim: Sim, t: Titan) {
@@ -870,6 +881,18 @@ export class BotBrain {
     const c = this.ctrl;
     const dep = sim.world.nearestDepot(s.pos);
     const dist = Math.hypot(dep.pos.x - s.pos.x, dep.pos.z - s.pos.z);
+    // outside the wall there is no supply, so a bot that is out there must climb back in
+    const outside = Math.hypot(s.pos.x, s.pos.z) > MARIA_R;
+    this.strandT = outside ? this.strandT + this.dt : 0;
+    if (this.strandT > 12 && s.gas < 25) {
+      // stranded: recall to the nearest depot with a little gas, so it can rejoin the squad
+      s.pos.set(dep.pos.x + 4, 1, dep.pos.z + 4);
+      s.vel.set(0, 0, 0);
+      s.gas = Math.max(s.gas, 25);
+      this.strandT = 0;
+      this.target = null;
+      return;
+    }
     if (dist < dep.radius - 1 && s.pos.y < 4) {
       this.arrived = true;
       c.move.set(0, 0, 0);
@@ -883,7 +906,7 @@ export class BotBrain {
     }
     this.steer(sim, _stage.set(dep.pos.x, 1, dep.pos.z), {
       alt: dist > 40 ? 10 : 2,
-      boost: "none",
+      boost: outside && s.gas > 0 ? "always" : "none",
       arrive: 3,
       mistime: this.P.mistime * 0.3,
     });

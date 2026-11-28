@@ -46,3 +46,11 @@
   - Done from this: W on a hook reels the rope in (7 m/s) and S pays it out (6 m/s), player only, no gas. scripts/aot.ts checks both, and that the rope cannot pass the hook range. Listed on the controls screen and the home page.
   - Already in the game: hook assist (24°), a generous nape reach (3 m plus the nape radius), and hook release that keeps momentum.
   - Not done: a nape-assist option in settings, and a backflip or side-flip dodge. Both are in the guides; neither is required by the request.
+- [x] **Towns, radar, fuel, reel and stranded bots (latest batch).**
+  - Done: town houses sit on a street grid (26 m pitch). Each lot faces the street, a fifth of the lots stay open, and the houses are no longer randomly rotated. Checked with a top-down render of Shiganshina (/tmp/shots/town-grid.png, not kept in the repo). Still sparse; the infill density could go up.
+  - Done: the radar (minimap) is draggable, is centred on the player, and shows a 220 m span. A click without a drag opens the full map (Tab). Titans and comrades show on the radar. Not visually checked in a browser (Chromium does not launch here).
+  - Done: bots under 70% gas skip far titans (over 80 m away) with a chance up to 80% at empty. Checked in aot.ts.
+  - Done: a bot outside Wall Maria with under 25 gas for 12 s is recalled to the nearest depot with 25 gas. A bot outside the wall also boosts toward the depot while it has gas. Checked in aot.ts.
+  - Done: a REEL button on touch (lower right, left of GRAB). It holds the rope in with no gas. Checked in aot.ts (the touch flag).
+  - Already true: LMB is the slash on PC (game.ts mousedown). Nothing changed.
+  - Open: combat.ts "fast slash at torso" failed once in four runs (a nape combo registered). It passed three reruns. Not investigated.

@@ -32,6 +32,7 @@ export function TouchPad({ game, onPause }: { game: Game; onPause: () => void })
       game.touch.active = false;
       game.touch.mx = game.touch.my = 0;
       game.touch.boost = false;
+      game.touch.reel = false;
       game.touch.hold[0] = game.touch.hold[1] = false;
     };
   }, [game]);
@@ -99,6 +100,17 @@ export function TouchPad({ game, onPause }: { game: Game; onPause: () => void })
       game.touchAction(i === 0 ? "hookL" : "hookR");
     }
   };
+  // REEL pulls the rope in while held: no gas, works on a hook with no fuel left
+  const reelDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    game.touch.reel = true;
+  };
+  const reelUp = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    game.touch.reel = false;
+  };
   const release = (i: 0 | 1 | 2) => (e: React.PointerEvent) => {
     e.stopPropagation();
     if (i === 2) game.touch.boost = false;
@@ -150,6 +162,7 @@ export function TouchPad({ game, onPause }: { game: Game; onPause: () => void })
       <Btn label="SPEAR" tone="gold" size={60} className="bottom-[200px] right-[118px]" down={tap("spear")} />
       <Btn label="RELOAD" tone="gray" size={60} className="bottom-[200px] right-[8px]" down={tap("reload")} />
       <Btn label="GRAB" tone="gray" size={56} className="bottom-[274px] right-[8px]" down={tap("struggle")} />
+      <Btn label="REEL" tone="green" size={56} className="bottom-[274px] right-[118px]" down={reelDown} up={reelUp} />
     </div>
   );
 }

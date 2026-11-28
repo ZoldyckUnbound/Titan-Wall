@@ -222,17 +222,28 @@ export function generateLayout(seed = 1337): Layout {
     const target = Math.round(d.density * (d.kind === "village" ? 1.35 : 1));
     let placed = 0;
     const clear = plazaClear(d);
-    for (let attempt = 0; attempt < target * 14 && placed < target; attempt++) {
-      const ang = rng.next() * Math.PI * 2;
-      const rr = Math.sqrt(rng.next()) * (d.r - 12);
-      const x = fx + Math.cos(ang) * rr;
-      const z = fz + Math.sin(ang) * rr;
+    // Streets run on a grid with a pitch of GRID_PITCH metres. Each lot sits between two street lines,
+    // faces the street, and leaves a lane on each side, so the town reads as blocks rather than scattered houses.
+    const GRID_PITCH = 26;
+    const lots: [number, number][] = [];
+    const reach = Math.ceil((d.r - 12) / GRID_PITCH) + 1;
+    for (let i = -reach; i < reach; i++) for (let j = -reach; j < reach; j++) lots.push([i, j]);
+    for (let k = lots.length - 1; k > 0; k--) {
+      const m = Math.floor(rng.next() * (k + 1));
+      [lots[k], lots[m]] = [lots[m], lots[k]];
+    }
+    for (let attempt = 0; attempt < lots.length && placed < target; attempt++) {
+      const [li, lj] = lots[attempt];
+      const x = fx + (li + 0.5) * GRID_PITCH + rng.range(-1.2, 1.2);
+      const z = fz + (lj + 0.5) * GRID_PITCH + rng.range(-1.2, 1.2);
+      if (Math.hypot(x - fx, z - fz) > d.r - 12) continue;
       if (Math.hypot(x - fx, z - fz) < clear + 8) continue;
       // keep two main streets clear through the district
       if (Math.abs(x - fx) < ROAD_HALF || Math.abs(z - fz) < ROAD_HALF) continue;
-      // a diagonal ring road keeps the town from becoming a solid block
-      if (d.r > 350 && Math.abs(Math.abs(x - fx) - Math.abs(z - fz)) < 6 && rng.next() < 0.9) continue;
-      const yaw = rng.next() < 0.5 ? 0 : Math.PI / 2 + (rng.next() - 0.5) * 0.14;
+      // a fifth of the lots stay open: gardens, yards and wells
+      if (rng.next() < 0.2) continue;
+      // lots face the street: axis-aligned with a small wobble
+      const yaw = rng.next() < 0.5 ? 0 : Math.PI / 2 + rng.range(-0.03, 0.03);
       let shape: Shape = "house";
       let roof: RoofKind = "gable";
       let w: number;

@@ -452,6 +452,29 @@ export default function App() {
     gameRef.current?.setMinimap(el);
   }, []);
   const gameRef = useRef<Game | null>(null);
+  // draggable radar: offset from its default corner, and the pointer state of the current drag
+  const [miniPos, setMiniPos] = useState({ x: 0, y: 0 });
+  const miniDrag = useRef<{ sx: number; sy: number; ox: number; oy: number; moved: boolean } | null>(null);
+  const miniDown = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    miniDrag.current = { sx: e.clientX, sy: e.clientY, ox: miniPos.x, oy: miniPos.y, moved: false };
+  };
+  const miniMove = (e: React.PointerEvent) => {
+    const d = miniDrag.current;
+    if (!d) return;
+    const dx = e.clientX - d.sx;
+    const dy = e.clientY - d.sy;
+    if (!d.moved && Math.hypot(dx, dy) < 5) return;
+    d.moved = true;
+    setMiniPos({ x: d.ox + dx, y: d.oy + dy });
+  };
+  const miniUp = () => {
+    const d = miniDrag.current;
+    miniDrag.current = null;
+    // a click without a drag expands the radar to the full map
+    if (d && !d.moved) gameRef.current?.toggleMap();
+  };
   const [progress, setProgress] = useState<Progress>(() => (typeof window === "undefined" ? EMPTY_PROGRESS : loadProgress()));
   const progressRef = useRef(progress);
   progressRef.current = progress;
@@ -625,10 +648,18 @@ export default function App() {
           </div>
 
           {/* minimap */}
-          <div className="absolute right-3 top-3">
-            {/* phones: the touch buttons fill the right edge, so the minimap is hidden (the canvas stays mounted) */}
-            <div className={`rounded-md border border-white/20 bg-black/40 p-1 ${touch ? "hidden" : ""}`}>
-              <canvas ref={miniRef} width={168} height={168} className="block h-[168px] w-[168px] rounded" />
+          <div className="absolute right-3 top-3" style={{ transform: `translate(${miniPos.x}px, ${miniPos.y}px)` }}>
+            {/* phones: the touch buttons fill the right edge, so the radar is hidden (the canvas stays mounted). Drag to move; click to open the full map. */}
+            <div
+              className={`cursor-move touch-none select-none rounded-md border border-white/20 bg-black/40 p-1 ${touch ? "hidden" : "pointer-events-auto"}`}
+              onPointerDown={miniDown}
+              onPointerMove={miniMove}
+              onPointerUp={miniUp}
+              onPointerCancel={miniUp}
+              title="Drag to move · click to open the full map (Tab)"
+            >
+              <canvas ref={miniRef} width={200} height={200} className="block h-[200px] w-[200px] rounded" />
+              <div className="pointer-events-none mt-0.5 text-center text-[9px] tracking-widest text-slate-300/80">RADAR · CLICK FOR MAP</div>
             </div>
             <div className={touch ? "fixed left-1/2 top-[52px] z-10 flex -translate-x-1/2 gap-3 rounded bg-black/50 px-3 py-0.5 font-mono text-[11px] text-slate-200" : "mt-1 flex justify-between px-1 font-mono text-[11px] text-slate-200"}>
               <span>{Math.round(s.speed)} m/s</span>

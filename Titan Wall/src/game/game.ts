@@ -149,7 +149,7 @@ export class Game implements Sim {
   private mouse = [false, false];
   private pendFire = [0, 0];
   /** Touch layer state (written by the on-screen pad in Touch.tsx). mx/my: stick, +my is forward. */
-  readonly touch = { mx: 0, my: 0, boost: false, hold: [false, false] as [boolean, boolean], lookX: 0, lookY: 0, active: false };
+  readonly touch = { mx: 0, my: 0, boost: false, reel: false, hold: [false, false] as [boolean, boolean], lookX: 0, lookY: 0, active: false };
   private pendSlash = false;
   /** Perk-adjusted player stats for the current run, and the loadout they came from. */
   private stats: BaseStats = BASE_STATS;
@@ -934,7 +934,7 @@ export class Game implements Sim {
     c.move.set(0, 0, 0).addScaledVector(_f, fw).addScaledVector(_r, rt);
     if (c.move.lengthSq() > 1) c.move.normalize();
     c.boost = k.has("Space") || tc.boost;
-    c.reel = k.has("ShiftLeft") || k.has("ShiftRight");
+    c.reel = k.has("ShiftLeft") || k.has("ShiftRight") || tc.reel;
     c.trim = fw;
     const cp = Math.cos(this.camPitch);
     c.boostDir.set(Math.sin(this.camYaw) * cp, Math.sin(this.camPitch), Math.cos(this.camYaw) * cp);
@@ -1496,10 +1496,13 @@ export class Game implements Sim {
     const c = this.mini;
     if (!g || !c) return;
     const S = c.width;
-    const span = 130;
+    const span = 220; // metres shown from the centre of the radar (the full map is Tab)
     const k = S / (span * 2);
-    const X = (x: number) => (x + span) * k;
-    const Y = (z: number) => (span - z) * k;
+    // centred on the player: the radar shows what is around you, not the whole map
+    const cx = this.player.pos.x;
+    const cz = this.player.pos.z;
+    const X = (x: number) => (x - cx + span) * k;
+    const Y = (z: number) => (span - (z - cz)) * k;
     g.clearRect(0, 0, S, S);
     g.fillStyle = "rgba(10,16,22,0.78)";
     g.fillRect(0, 0, S, S);

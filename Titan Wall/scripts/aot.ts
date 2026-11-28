@@ -1,6 +1,7 @@
 // AOT Revolution / Danny's-style ODM rules: swing with A/D on a hook, no gas while hooked but not boosting,
 // boost lifts even when looking down, and blade reloads come from depots (the reload stations).
 import { Game } from "../src/game/game";
+import * as THREE from "three";
 
 let fails = 0;
 const check = (ok: boolean, label: string) => {
@@ -135,6 +136,51 @@ function attach(g: Game, at: [number, number, number], anchor: [number, number, 
   const t0 = g3.player.hooks[0].ropeLen;
   for (let i = 0; i < 30; i++) { g3.touch.hold[0] = true; g3.update(dt); }
   check(Math.abs(g3.player.hooks[0].ropeLen - t0) < 0.01, "no W or S leaves the rope alone");
+}
+
+// 6. touch REEL pulls the rope in with no fuel left
+{
+  const g = fresh();
+  attach(g, [0, 60, 0], [0, 140, 0]);
+  g.player.gas = 0;
+  const r0 = g.player.hooks[0].ropeLen;
+  for (let i = 0; i < 30; i++) { g.touch.hold[0] = true; g.touch.reel = true; g.update(dt); }
+  check(g.player.hooks[0].ropeLen < r0 - 1.5, `touch REEL reels in with no gas (${r0.toFixed(1)} m → ${g.player.hooks[0].ropeLen.toFixed(1)} m)`);
+}
+
+// 7. a bot stranded outside Wall Maria with no gas is recalled to a depot
+{
+  const g = fresh();
+  const b = g.brains[0] as any;
+  b.scout.alive = true; b.scout.model.visible = true; b.scout.hp = b.scout.maxHp;
+  const s = b.scout;
+  const MARIA = 4800;
+  s.pos.set(MARIA + 1200, 40, 0);
+  s.vel.set(0, 0, 0);
+  s.gas = 0;
+  s.grounded = false;
+  b.state = "resupply";
+  for (let i = 0; i < 60 * 14; i++) { g.update(dt); if (Math.hypot(s.pos.x, s.pos.z) < MARIA) break; }
+  check(Math.hypot(s.pos.x, s.pos.z) < MARIA, "a bot stranded outside Maria with no gas is recalled inside the wall");
+  check(s.gas >= 25, "the recalled bot gets a little gas");
+}
+
+// 8. low fuel: a bot at under 70% gas rarely heads for a far titan
+{
+  const g = fresh();
+  const b = g.brains[0] as any;
+  b.scout.alive = true; b.scout.model.visible = true; b.scout.hp = b.scout.maxHp;
+  const far = { pos: b.scout.pos.clone().add(new THREE.Vector3(300, 0, 0)) } as any;
+  b.scout.gas = 90;
+  check(b.exploreOK(far) === true, "a bot above 70% gas goes after any titan");
+  let yes = 0;
+  b.scout.gas = 5;
+  for (let i = 0; i < 2000; i++) if (b.exploreOK(far)) yes++;
+  check(yes / 2000 < 0.35, `a bot at 5% gas rarely heads for a far titan (${((yes / 2000) * 100).toFixed(0)}% of tries)`);
+  const near = { pos: b.scout.pos.clone().add(new THREE.Vector3(20, 0, 0)) } as any;
+  let nearYes = 0;
+  for (let i = 0; i < 200; i++) if (b.exploreOK(near)) nearYes++;
+  check(nearYes === 200, "a nearby titan is always fine, even at low fuel");
 }
 
 console.log(fails === 0 ? "ALL PASSED" : `${fails} FAILED`);
